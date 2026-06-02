@@ -1,9 +1,11 @@
 {
   "expo": {
-    "name": "minigames",
+    "name": "미니게임",
     "slug": "minigames",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "minigames",
+    "plugins": ["expo-router"],
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
@@ -19,7 +21,9 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "static"
     }
   }
 }
