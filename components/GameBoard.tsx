@@ -8,7 +8,6 @@ interface Props {
   currentGuess: string[];
   currentRow: number;
   wordLength: number;
-  gameOver: boolean;
 }
 
 const TILE_COLORS: Record<TileStatus, string> = {
@@ -27,10 +26,8 @@ const TILE_BORDER_COLORS: Record<TileStatus, string> = {
   active: '#999',
 };
 
-export default function GameBoard({ guesses, statuses, currentGuess, currentRow, wordLength, gameOver }: Props) {
-  // 완료된 줄 + 현재 입력 줄만 표시 (게임 종료 시 전체 표시)
-  const visibleRows = gameOver ? 5 : currentRow + 1;
-  const rows = Array(Math.min(visibleRows, 5)).fill(null);
+export default function GameBoard({ guesses, statuses, currentGuess, currentRow, wordLength }: Props) {
+  const rows = Array(5).fill(null);
 
   return (
     <View style={styles.board}>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Stack } from 'expo-router';
 import GameBoard from '../../components/GameBoard';
 import JamoKeyboard from '../../components/JamoKeyboard';
 import StatsModal from '../../components/StatsModal';
-import { evaluateGuess, TileStatus } from '../../utils/gameLogic';
+import { evaluateGuess, isValidKeystroke, TileStatus } from '../../utils/gameLogic';
 import { decomposeToKeystrokes } from '../../utils/jamo';
 import { updateStats, GameStats, loadStats } from '../../utils/storage';
 import { getTodayWord } from '../../constants/wordList';
@@ -24,10 +24,14 @@ export default function JamoWordleScreen() {
   const [showStats, setShowStats] = useState(false);
   const [stats, setStats] = useState<GameStats>({ totalGames: 0, wins: 0, currentStreak: 0, maxStreak: 0, distribution: [0,0,0,0,0] });
   const [keyStatuses, setKeyStatuses] = useState<Record<string, TileStatus>>({});
+  const [errorMsg, setErrorMsg] = useState('');
 
-  useEffect(() => {
-    loadStats().then(setStats);
-  }, []);
+  useEffect(() => { loadStats().then(setStats); }, []);
+
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(''), 2000);
+  };
 
   const updateKeyStatuses = useCallback((guess: string[], result: TileStatus[]) => {
     setKeyStatuses(prev => {
@@ -35,9 +39,7 @@ export default function JamoWordleScreen() {
       const priority: Record<TileStatus, number> = { correct: 3, present: 2, absent: 1, empty: 0, active: 0 };
       guess.forEach((jamo, i) => {
         const cur = next[jamo];
-        if (!cur || priority[result[i]] > priority[cur]) {
-          next[jamo] = result[i];
-        }
+        if (!cur || priority[result[i]] > priority[cur]) next[jamo] = result[i];
       });
       return next;
     });
@@ -53,7 +55,11 @@ export default function JamoWordleScreen() {
 
     if (key === '✓') {
       if (currentGuess.length !== WORD_LENGTH) {
-        Alert.alert('입력 오류', `${WORD_LENGTH}개의 자모를 입력해주세요.`);
+        showError(`자모 ${WORD_LENGTH}개를 입력해주세요`);
+        return;
+      }
+      if (!isValidKeystroke(currentGuess)) {
+        showError('올바른 한국어 단어 형식이 아니에요');
         return;
       }
 
@@ -97,12 +103,12 @@ export default function JamoWordleScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <Text style={styles.hint}>
-            오늘의 단어: <Text style={styles.hintJamo}>{answerJamo.join(' ')}</Text>
-          </Text>
-          <Text style={styles.hintSub}>↑ 힌트 (자모 순서는 같아요)</Text>
-        </View>
+        {/* 에러 메시지 */}
+        {errorMsg ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        ) : null}
 
         <GameBoard
           guesses={guesses}
@@ -110,14 +116,7 @@ export default function JamoWordleScreen() {
           currentGuess={currentGuess}
           currentRow={guesses.length}
           wordLength={WORD_LENGTH}
-          gameOver={gameOver}
         />
-
-        {gameOver && (
-          <Text style={styles.gameOverText}>
-            {won ? '🎉 정답!' : `😢 정답은 "${todayWord}" 이었어요`}
-          </Text>
-        )}
 
         <JamoKeyboard onKey={handleKey} keyStatuses={keyStatuses} />
 
@@ -143,28 +142,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 4,
+  errorBanner: {
+    backgroundColor: '#B00020',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 8,
   },
-  hint: {
-    color: '#818384',
-    fontSize: 14,
-  },
-  hintJamo: {
-    color: '#538D4E',
-    fontWeight: 'bold',
-  },
-  hintSub: {
-    color: '#3A3A3C',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  gameOverText: {
+  errorText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginVertical: 8,
-    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
