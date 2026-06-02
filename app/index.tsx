@@ -1,26 +1,30 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 
 export default function HomeScreen() {
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>미니게임</Text>
-      <Text style={styles.subtitle}>게임을 선택하세요</Text>
+    <>
+      <Stack.Screen options={{ title: "Baek's test Games" }} />
+      <View style={styles.container}>
+        <Text style={styles.title}>Baek's test Games</Text>
+        <Text style={styles.subtitle}>게임을 선택하세요</Text>
 
-      <TouchableOpacity
-        style={styles.gameCard}
-        onPress={() => router.push('/jamo-wordle')}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.gameEmoji}>🔤</Text>
-        <View>
-          <Text style={styles.gameName}>자모 워들</Text>
-          <Text style={styles.gameDesc}>5자모로 2글자 한국어 단어 맞추기</Text>
-        </View>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity
+          style={styles.gameCard}
+          onPress={() => router.push('/jamo-wordle')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🔤</Text>
+          <View>
+            <Text style={styles.gameName}>단어 맞추기 게임</Text>
+            <Text style={styles.gameDesc}>5자모로 2글자 한국어 단어 맞추기</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </>
   );
 }
 

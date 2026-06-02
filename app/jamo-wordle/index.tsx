@@ -91,7 +91,7 @@ export default function JamoWordleScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: '자모 워들' }} />
+      <Stack.Screen options={{ title: '단어 맞추기 게임' }} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
