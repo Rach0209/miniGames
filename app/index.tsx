@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
 
@@ -9,6 +9,13 @@ export default function HomeScreen() {
     <>
       <Stack.Screen options={{ title: "Baek's test Games" }} />
       <View style={styles.container}>
+        <TouchableOpacity
+          style={styles.githubLink}
+          onPress={() => Linking.openURL('https://github.com/Rach0209/miniGames')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.githubText}>⌥ GitHub</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Baek's test Games</Text>
         <Text style={styles.subtitle}>게임을 선택하세요</Text>
 
@@ -34,6 +41,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#121213',
     padding: 24,
     paddingTop: 48,
+  },
+  githubLink: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A1A1B',
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginBottom: 24,
+  },
+  githubText: {
+    color: '#818384',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   title: {
     color: '#fff',
