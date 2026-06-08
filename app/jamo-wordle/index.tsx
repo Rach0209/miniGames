@@ -7,7 +7,8 @@ import JamoKeyboard from '../../components/JamoKeyboard';
 import StatsModal from '../../components/StatsModal';
 import { evaluateGuess, isValidKeystroke, TileStatus } from '../../utils/gameLogic';
 import { decomposeToKeystrokes } from '../../utils/jamo';
-import { updateStats, GameStats, loadStats, loadDailyRecord, saveDailyRecord } from '../../utils/storage';
+import { updateStats, GameStats, loadStats, loadTodayStatus } from '../../utils/storage';
+import { supabase } from '../../utils/supabase';
 import { getTodayWord, getRandomWord } from '../../constants/wordList';
 
 const WORD_LENGTH = 5;
@@ -32,30 +33,24 @@ export default function JamoWordleScreen() {
   const [keyStatuses, setKeyStatuses] = useState<Record<string, TileStatus>>({});
   const [errorMsg, setErrorMsg] = useState('');
   const [alreadyPlayedToday, setAlreadyPlayedToday] = useState(false);
+  const [todayWon, setTodayWon] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showGuestNotice, setShowGuestNotice] = useState(false);
 
-  // 초기 로딩: 오늘 플레이 여부 확인
+  // 초기 로딩
   useEffect(() => {
     loadStats().then(setStats);
-    loadDailyRecord().then(record => {
-      if (record?.played) {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsLoggedIn(!!user);
+      if (!user) {
+        setShowGuestNotice(true);
+      }
+    });
+    loadTodayStatus().then(status => {
+      if (status?.played) {
         setAlreadyPlayedToday(true);
-        setGuesses(record.guesses);
-        setStatuses(record.statuses);
-        setWon(record.won);
+        setTodayWon(status.won);
         setGameOver(true);
-        setTargetWord(record.answer);
-        setAnswerJamo(decomposeToKeystrokes(record.answer));
-        // 키보드 색상 복원
-        const ks: Record<string, TileStatus> = {};
-        const priority: Record<TileStatus, number> = { correct: 3, present: 2, absent: 1, empty: 0, active: 0 };
-        record.guesses.forEach((g, i) => {
-          g.forEach((jamo, j) => {
-            const cur = ks[jamo];
-            if (!cur || priority[record.statuses[i][j]] > priority[cur]) ks[jamo] = record.statuses[i][j];
-          });
-        });
-        setKeyStatuses(ks);
-        setTimeout(() => setShowStats(true), 300);
       }
     });
   }, []);
@@ -90,6 +85,7 @@ export default function JamoWordleScreen() {
     setGameOver(false);
     setWon(false);
     setShowStats(false);
+    setAlreadyPlayedToday(false);
   }, [targetWord]);
 
   const handleKey = useCallback((key: string) => {
@@ -125,20 +121,9 @@ export default function JamoWordleScreen() {
       if (isOver) {
         setWon(isWon);
         setGameOver(true);
-
         if (mode === 'daily') {
-          // 통계 저장 + 일일 기록 저장
           updateStats(isWon, newGuesses.length).then(s => setStats(s));
-          saveDailyRecord({
-            date: new Date().toISOString().slice(0, 10),
-            played: true,
-            won: isWon,
-            answer: targetWord,
-            guesses: newGuesses,
-            statuses: newStatuses,
-          });
         }
-
         setTimeout(() => setShowStats(true), 800);
       }
       return;
@@ -147,9 +132,37 @@ export default function JamoWordleScreen() {
     if (currentGuess.length < WORD_LENGTH) {
       setCurrentGuess(prev => [...prev, key]);
     }
-  }, [gameOver, currentGuess, guesses, statuses, answerJamo, updateKeyStatuses, mode, targetWord]);
+  }, [gameOver, currentGuess, guesses, statuses, answerJamo, updateKeyStatuses, mode]);
 
   const modeLabel = mode === 'daily' ? '오늘의 단어' : '자유 모드';
+
+  // 로그인 유저가 오늘 이미 플레이한 경우
+  if (alreadyPlayedToday && mode === 'daily') {
+    return (
+      <>
+        <Stack.Screen
+          options={{
+            title: `단어 맞추기 — ${modeLabel}`,
+            headerLeft: () => (
+              <TouchableOpacity onPress={() => router.replace('/')} style={{ paddingHorizontal: 8 }}>
+                <Ionicons name="home-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <View style={styles.doneContainer}>
+          <Text style={styles.doneEmoji}>{todayWon ? '🎉' : '😅'}</Text>
+          <Text style={styles.doneTitle}>오늘의 단어는 이미 완료했어요!</Text>
+          <Text style={styles.doneSubtitle}>
+            {todayWon ? '정답을 맞췄어요' : '아쉽게 실패했어요'}
+          </Text>
+          <TouchableOpacity style={styles.freeModeButton} onPress={startFreeMode} activeOpacity={0.8}>
+            <Text style={styles.freeModeButtonText}>🎲 자유 모드로 계속하기</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    );
+  }
 
   return (
     <>
@@ -168,12 +181,23 @@ export default function JamoWordleScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 모드 배지 */}
         <View style={[styles.modeBadge, mode === 'free' && styles.modeBadgeFree]}>
           <Text style={styles.modeBadgeText}>{modeLabel}</Text>
         </View>
 
-        {/* 에러 메시지 */}
+        {/* 비로그인 안내 */}
+        {showGuestNotice && (
+          <TouchableOpacity
+            style={styles.guestNotice}
+            onPress={() => setShowGuestNotice(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.guestNoticeText}>
+              🔒 로그인하지 않으면 기록이 저장되지 않아요  ✕
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {errorMsg ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorText}>{errorMsg}</Text>
@@ -190,14 +214,12 @@ export default function JamoWordleScreen() {
 
         <JamoKeyboard onKey={handleKey} keyStatuses={keyStatuses} />
 
-        {/* 자유 모드 버튼 (일일 게임 종료 후) */}
         {gameOver && mode === 'daily' && (
           <TouchableOpacity style={styles.freeModeButton} onPress={startFreeMode} activeOpacity={0.8}>
             <Text style={styles.freeModeButtonText}>🎲 자유 모드로 계속하기</Text>
           </TouchableOpacity>
         )}
 
-        {/* 자유 모드 중: 다음 단어 버튼 */}
         {gameOver && mode === 'free' && (
           <TouchableOpacity style={styles.freeModeButton} onPress={startFreeMode} activeOpacity={0.8}>
             <Text style={styles.freeModeButtonText}>🔄 다음 단어</Text>
@@ -226,6 +248,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     paddingBottom: 32,
+  },
+  doneContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  doneEmoji: {
+    fontSize: 64,
+    marginBottom: 8,
+  },
+  doneTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  doneSubtitle: {
+    color: '#818384',
+    fontSize: 15,
+    marginBottom: 16,
   },
   modeBadge: {
     backgroundColor: '#2C2C2E',
@@ -267,5 +312,17 @@ const styles = StyleSheet.create({
     color: '#4A90D9',
     fontSize: 16,
     fontWeight: '700',
+  },
+  guestNotice: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  guestNoticeText: {
+    color: '#A8A8B3',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

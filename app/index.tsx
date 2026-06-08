@@ -27,7 +27,7 @@ export default function HomeScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Baek's test Games" }} />
+      <Stack.Screen options={{ title: "Baek's test Games", headerBackVisible: false, headerLeft: () => null }} />
       <View style={styles.container}>
 
         {/* 상단 GitHub + 로그인 버튼 */}
