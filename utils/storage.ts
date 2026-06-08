@@ -1,4 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
+import type { TileStatus } from './gameLogic';
+
+// ── 일일 기록 ──
+export interface DailyRecord {
+  date: string;       // YYYY-MM-DD
+  played: boolean;
+  won: boolean;
+  answer: string;
+  guesses: string[][];
+  statuses: TileStatus[][];
+}
+
+function getTodayKey(): string {
+  const d = new Date();
+  return `daily_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+export async function loadDailyRecord(): Promise<DailyRecord | null> {
+  try {
+    const data = await AsyncStorage.getItem(`jamo_wordle_${getTodayKey()}`);
+    if (data) return JSON.parse(data);
+  } catch {}
+  return null;
+}
+
+export async function saveDailyRecord(record: DailyRecord): Promise<void> {
+  await AsyncStorage.setItem(`jamo_wordle_${getTodayKey()}`, JSON.stringify(record));
+}
 
 export interface GameStats {
   totalGames: number;
@@ -9,6 +38,7 @@ export interface GameStats {
 }
 
 const STATS_KEY = 'jamo_wordle_stats';
+const GAME_TYPE = 'jamo-wordle';
 
 const defaultStats: GameStats = {
   totalGames: 0,
@@ -18,12 +48,65 @@ const defaultStats: GameStats = {
   distribution: [0, 0, 0, 0, 0],
 };
 
-export async function loadStats(): Promise<GameStats> {
+async function getCurrentUser() {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
+// 로컬 저장
+async function loadLocalStats(): Promise<GameStats> {
   try {
     const data = await AsyncStorage.getItem(STATS_KEY);
     if (data) return { ...defaultStats, ...JSON.parse(data) };
   } catch {}
   return { ...defaultStats };
+}
+
+async function saveLocalStats(stats: GameStats): Promise<void> {
+  await AsyncStorage.setItem(STATS_KEY, JSON.stringify(stats));
+}
+
+// Supabase 저장
+async function loadRemoteStats(userId: string): Promise<GameStats | null> {
+  const { data, error } = await supabase
+    .from('game_stats')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('game_type', GAME_TYPE)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    totalGames: data.total_games,
+    wins: data.wins,
+    currentStreak: data.current_streak,
+    maxStreak: data.max_streak,
+    distribution: data.distribution,
+  };
+}
+
+async function saveRemoteStats(userId: string, stats: GameStats): Promise<void> {
+  await supabase.from('game_stats').upsert({
+    user_id: userId,
+    game_type: GAME_TYPE,
+    total_games: stats.totalGames,
+    wins: stats.wins,
+    current_streak: stats.currentStreak,
+    max_streak: stats.maxStreak,
+    distribution: stats.distribution,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,game_type' });
+}
+
+// 공개 API
+export async function loadStats(): Promise<GameStats> {
+  const user = await getCurrentUser();
+  if (user) {
+    const remote = await loadRemoteStats(user.id);
+    if (remote) return remote;
+  }
+  return loadLocalStats();
 }
 
 export async function updateStats(won: boolean, attempts: number): Promise<GameStats> {
@@ -37,6 +120,13 @@ export async function updateStats(won: boolean, attempts: number): Promise<GameS
   } else {
     stats.currentStreak = 0;
   }
-  await AsyncStorage.setItem(STATS_KEY, JSON.stringify(stats));
+
+  const user = await getCurrentUser();
+  if (user) {
+    await saveRemoteStats(user.id, stats);
+  } else {
+    await saveLocalStats(stats);
+  }
+
   return stats;
 }

@@ -1,23 +1,60 @@
+import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
+import { signInWithGoogle, signOut, onAuthStateChange } from '../utils/supabase';
+import type { User } from '@supabase/supabase-js';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const { data: { subscription } } = onAuthStateChange((u) => setUser(u));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    const { data, error } = await signInWithGoogle();
+    if (error) {
+      console.error('로그인 오류:', error.message);
+      return;
+    }
+    if (data?.url) {
+      Linking.openURL(data.url);
+    }
+  };
 
   return (
     <>
       <Stack.Screen options={{ title: "Baek's test Games" }} />
       <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.githubLink}
-          onPress={() => Linking.openURL('https://github.com/Rach0209/miniGames')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.githubText}>⌥ GitHub</Text>
-        </TouchableOpacity>
+
+        {/* 상단 GitHub + 로그인 버튼 */}
+        <View style={styles.topRow}>
+          <TouchableOpacity
+            style={styles.githubLink}
+            onPress={() => Linking.openURL('https://github.com/Rach0209/miniGames')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.githubText}>⌥ GitHub</Text>
+          </TouchableOpacity>
+
+          {user ? (
+            <TouchableOpacity style={styles.authButton} onPress={signOut} activeOpacity={0.7}>
+              <Text style={styles.authButtonText}>로그아웃</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.authButton} onPress={handleGoogleLogin} activeOpacity={0.7}>
+              <Text style={styles.authButtonText}>Google 로그인</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <Text style={styles.title}>Baek's test Games</Text>
-        <Text style={styles.subtitle}>게임을 선택하세요</Text>
+        <Text style={styles.subtitle}>
+          {user ? `${user.email}` : '게임을 선택하세요'}
+        </Text>
 
         <TouchableOpacity
           style={styles.gameCard}
@@ -30,6 +67,7 @@ export default function HomeScreen() {
             <Text style={styles.gameDesc}>5자모로 2글자 한국어 단어 맞추기</Text>
           </View>
         </TouchableOpacity>
+
       </View>
     </>
   );
@@ -42,23 +80,38 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 48,
   },
-  githubLink: {
-    alignSelf: 'flex-start',
+  topRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 24,
+  },
+  githubLink: {
     backgroundColor: '#1A1A1B',
     borderWidth: 1,
     borderColor: '#3A3A3C',
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    marginBottom: 24,
   },
   githubText: {
     color: '#818384',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  authButton: {
+    backgroundColor: '#1A1A1B',
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  authButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   title: {
     color: '#fff',
