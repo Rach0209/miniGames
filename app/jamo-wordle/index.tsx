@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import GameBoard from '../../components/GameBoard';
@@ -9,7 +9,7 @@ import { evaluateGuess, isValidKeystroke, TileStatus } from '../../utils/gameLog
 import { decomposeToKeystrokes } from '../../utils/jamo';
 import { updateStats, GameStats, loadStats, loadTodayStatus } from '../../utils/storage';
 import { supabase } from '../../utils/supabase';
-import { getTodayWord, getRandomWord } from '../../constants/wordList';
+import { fetchWordPool, getTodayWord, getRandomWord } from '../../constants/wordList';
 
 const WORD_LENGTH = 5;
 const MAX_TRIES = 5;
@@ -19,9 +19,13 @@ type GameMode = 'daily' | 'free';
 export default function JamoWordleScreen() {
   const router = useRouter();
 
+  const [wordList, setWordList] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
   const [mode, setMode] = useState<GameMode>('daily');
-  const [targetWord, setTargetWord] = useState<string>(getTodayWord());
-  const [answerJamo, setAnswerJamo] = useState<string[]>(decomposeToKeystrokes(getTodayWord()));
+  const [targetWord, setTargetWord] = useState<string>('');
+  const [answerJamo, setAnswerJamo] = useState<string[]>([]);
 
   const [guesses, setGuesses] = useState<string[][]>([]);
   const [statuses, setStatuses] = useState<TileStatus[][]>([]);
@@ -37,21 +41,34 @@ export default function JamoWordleScreen() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showGuestNotice, setShowGuestNotice] = useState(false);
 
-  // 초기 로딩
+  // 단어 목록 + 초기 상태 로딩
   useEffect(() => {
-    loadStats().then(setStats);
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    Promise.all([
+      fetchWordPool(),
+      loadStats(),
+      supabase.auth.getUser(),
+      loadTodayStatus(),
+    ]).then(([words, s, { data: { user } }, todayStatus]) => {
+      setWordList(words);
+      setStats(s);
+
+      const today = getTodayWord(words);
+      setTargetWord(today);
+      setAnswerJamo(decomposeToKeystrokes(today));
+
       setIsLoggedIn(!!user);
-      if (!user) {
-        setShowGuestNotice(true);
-      }
-    });
-    loadTodayStatus().then(status => {
-      if (status?.played) {
+      if (!user) setShowGuestNotice(true);
+
+      if (todayStatus?.played) {
         setAlreadyPlayedToday(true);
-        setTodayWon(status.won);
+        setTodayWon(todayStatus.won);
         setGameOver(true);
       }
+
+      setLoading(false);
+    }).catch(() => {
+      setLoadError('단어 목록을 불러오지 못했어요. 네트워크를 확인해주세요.');
+      setLoading(false);
     });
   }, []);
 
@@ -72,9 +89,8 @@ export default function JamoWordleScreen() {
     });
   }, []);
 
-  // 자유 모드 시작
   const startFreeMode = useCallback(() => {
-    const newWord = getRandomWord(targetWord);
+    const newWord = getRandomWord(wordList, targetWord);
     setMode('free');
     setTargetWord(newWord);
     setAnswerJamo(decomposeToKeystrokes(newWord));
@@ -86,7 +102,7 @@ export default function JamoWordleScreen() {
     setWon(false);
     setShowStats(false);
     setAlreadyPlayedToday(false);
-  }, [targetWord]);
+  }, [wordList, targetWord]);
 
   const handleKey = useCallback((key: string) => {
     if (gameOver) return;
@@ -136,7 +152,49 @@ export default function JamoWordleScreen() {
 
   const modeLabel = mode === 'daily' ? '오늘의 단어' : '자유 모드';
 
-  // 로그인 유저가 오늘 이미 플레이한 경우
+  // 로딩 중
+  if (loading) {
+    return (
+      <>
+        <Stack.Screen options={{ title: '단어 맞추기' }} />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#538D4E" />
+          <Text style={styles.loadingText}>단어 불러오는 중...</Text>
+        </View>
+      </>
+    );
+  }
+
+  // 로딩 실패
+  if (loadError) {
+    return (
+      <>
+        <Stack.Screen options={{ title: '단어 맞추기' }} />
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorEmoji}>😢</Text>
+          <Text style={styles.errorTitle}>{loadError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => {
+            setLoadError('');
+            setLoading(true);
+            fetchWordPool().then(words => {
+              setWordList(words);
+              const today = getTodayWord(words);
+              setTargetWord(today);
+              setAnswerJamo(decomposeToKeystrokes(today));
+              setLoading(false);
+            }).catch(() => {
+              setLoadError('단어 목록을 불러오지 못했어요. 네트워크를 확인해주세요.');
+              setLoading(false);
+            });
+          }}>
+            <Text style={styles.retryText}>다시 시도</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    );
+  }
+
+  // 오늘 이미 플레이한 경우
   if (alreadyPlayedToday && mode === 'daily') {
     return (
       <>
@@ -185,7 +243,6 @@ export default function JamoWordleScreen() {
           <Text style={styles.modeBadgeText}>{modeLabel}</Text>
         </View>
 
-        {/* 비로그인 안내 */}
         {showGuestNotice && (
           <TouchableOpacity
             style={styles.guestNotice}
@@ -248,6 +305,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     paddingBottom: 32,
+  },
+  centerContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    color: '#818384',
+    fontSize: 15,
+  },
+  errorEmoji: {
+    fontSize: 48,
+  },
+  errorTitle: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  retryButton: {
+    backgroundColor: '#538D4E',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    marginTop: 8,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
   },
   doneContainer: {
     flex: 1,
