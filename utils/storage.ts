@@ -1,5 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import type { TileStatus } from './gameLogic';
+
+// ── 일일 기록 ──
+export interface DailyRecord {
+  date: string;       // YYYY-MM-DD
+  played: boolean;
+  won: boolean;
+  answer: string;
+  guesses: string[][];
+  statuses: TileStatus[][];
+}
+
+function getTodayKey(): string {
+  const d = new Date();
+  return `daily_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+export async function loadDailyRecord(): Promise<DailyRecord | null> {
+  try {
+    const data = await AsyncStorage.getItem(`jamo_wordle_${getTodayKey()}`);
+    if (data) return JSON.parse(data);
+  } catch {}
+  return null;
+}
+
+export async function saveDailyRecord(record: DailyRecord): Promise<void> {
+  await AsyncStorage.setItem(`jamo_wordle_${getTodayKey()}`, JSON.stringify(record));
+}
 
 export interface GameStats {
   totalGames: number;
