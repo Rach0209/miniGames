@@ -1,124 +1,32 @@
-import { decomposeToKeystrokes } from '../utils/jamo';
+import { supabase } from '../utils/supabase';
 
-/**
- * 한국어 명사 목록 (5 키스트로크 필터 적용)
- * 키스트로크 규칙:
- *  - 일반 자음+모음(받침없) = 2ks  예) 바=ㅂ+ㅏ
- *  - 자음+모음+받침 = 3ks          예) 람=ㄹ+ㅏ+ㅁ
- *  - ㅐ(ㅏ+ㅣ)/ㅔ(ㅓ+ㅣ) 받침없 = 3ks 예) 배=ㅂ+ㅏ+ㅣ
- *  - ㅐ/ㅔ + 받침 = 4ks            예) 생=ㅅ+ㅏ+ㅣ+ㅇ (제외 대상)
- * 5ks 패턴: 2+3, 3+2, 3+2(ㅐ/ㅔ글자+단순), 2+3(단순+ㅐ/ㅔ글자)
- */
-const RAW_WORDS: string[] = [
+let cachedWords: string[] = [];
 
-  // ── 자연·환경 ──
-  '하늘', '바람', '가을', '구름', '노을', '모래', '사막',
-  '가뭄', '홍수', '지진', '우박', '나방', '사슴', '표범',
-  '고래', '파래', '새우', '개미', '기린',
+export async function fetchWordPool(): Promise<string[]> {
+  if (cachedWords.length > 0) return cachedWords;
 
-  // ── 신체·감각 ──
-  '가슴', '두뇌', '기억', '마음', '아침', '기분', '두통',
-  '아픔', '주름', '모습', '추억',
+  const { data, error } = await supabase
+    .from('word_pool')
+    .select('word')
+    .order('word');
 
-  // ── 감정·추상 ──
-  '사랑', '희망', '도전', '기쁨', '소원', '보람', '초심',
-  '소망', '모험', '기적', '고민', '이별', '자랑', '고통',
-  '부담', '비밀', '차별', '고집', '오염', '노력', '이익',
-  '비율', '사업', '가능', '부족', '소통', '지식', '도착',
-  '소득', '자격',
+  if (error || !data || data.length === 0) {
+    throw new Error('단어 목록을 불러오지 못했어요.');
+  }
 
-  // ── 사람·관계 ──
-  '아들', '아침', '사촌', '사냥', '도움', '인사', '봉사',
-  '참여', '감사', '인류',
-
-  // ── 사물·도구 ──
-  '가방', '바늘', '사탕', '수건', '지갑', '우산', '그릇',
-  '거울', '자석', '나팔', '종이', '편지', '나물', '보물',
-  '유물', '조각', '기름', '도박',
-
-  // ── 음식 ──
-  '소금', '마늘', '버섯', '만두', '문어', '채소', '배추',
-  '라면', '우동', '김치', '감자', '양파', '수박', '딸기',
-  '망고', '사과', '배우',
-
-  // ── 장소·지리 ──
-  '고향', '도심', '제주', '부산', '강가',
-
-  // ── 학문·예술 ──
-  '자연', '수학', '미술', '국어', '영어', '역사', '기술',
-  '물리', '대수', '지식', '소설', '도예', '서예', '무예',
-  '기예', '기계', '기회', '단어',
-
-  // ── 사회·제도 ──
-  '사건', '사실', '사진', '여름', '시간', '부분', '주변',
-  '여행', '학교', '전부', '목표', '필요', '인기', '전기',
-  '청소', '산소', '장기', '공기', '공포', '분노', '감기',
-  '점수', '중요', '신비', '전자', '분자', '가족', '사회',
-  '지혜', '미래',
-
-  // ── 자연2 ──
-  '우물', '봄비', '장미', '잔디', '낙타', '노래', '모래',
-
-  // ── 2+3 추가 ──
-  '가슴', '나물', '도심', '바탕', '소원', '저녁', '자음',
-  '모음', '주먹', '파랑', '초록', '허물', '이름', '처음',
-  '기쁨', '도전', '나쁨', '두근', '지름', '사슴', '사냥',
-  '유물', '나팔', '보물', '지평', '오염', '비율',
-  '우박', '가뭄', '지진', '나방',
-
-  // ── 3+2 추가 ──
-  '상처', '과거', '감사', '분노', '공포', '공기', '감기',
-  '인기', '전기', '전자', '분자', '홍수', '역사', '국어',
-  '영어', '수학', '미술', '물리', '대수', '목표', '필요',
-  '장기', '인류', '신비', '청소', '산소', '점수', '중요',
-  '전부', '학교',
-
-  // ── ㅔ 계열 (세=ㅅ+ㅓ+ㅣ) ──
-  '세수', '세로', '세기', '세포', '메모', '제도', '체조',
-  '세나', '제비',
-
-  // ── ㅐ 계열 (배=ㅂ+ㅏ+ㅣ) ──
-  '재미', '배우', '대기', '태도', '개미', '채소', '대구',
-  '태아', '재고', '대비', '해수', '해소', '해부', '패기',
-  '매기', '배려', '배추', '배포', '새우', '개요',
-  '가래', '고래', '노래', '모래', '도매', '소매', '파래',
-  '나래', '기회', '도예', '서예', '무예', '기예', '기계',
-
-  // ── 씨앗·자연소재 ──
-  '사과', '망고', '수박', '양파', '감자',
-  '라면', '우동', '김치', '그릇', '거울',
-
-  // ── 기타 명사 ──
-  '의자', '수건', '지갑', '우산', '기린', '거북', '표범',
-  '비행', '교과', '지진', '가뭄', '홍수', '우박',
-];
-
-// 쌍자음 (키보드에 없음) → 해당 단어 제외
-const DOUBLE_CONSONANTS = new Set(['ㄲ', 'ㄸ', 'ㅃ', 'ㅆ', 'ㅉ']);
-function hasDoubleConsonant(w: string): boolean {
-  try {
-    return decomposeToKeystrokes(w).some(k => DOUBLE_CONSONANTS.has(k));
-  } catch { return true; }
+  cachedWords = data.map((r: { word: string }) => r.word);
+  return cachedWords;
 }
 
-// 정확히 5 키스트로크 + 쌍자음 없는 단어만 필터링 (중복 제거)
-export const WORD_LIST: string[] = Array.from(
-  new Set(RAW_WORDS.filter(w => {
-    try {
-      return decomposeToKeystrokes(w).length === 5 && !hasDoubleConsonant(w);
-    } catch { return false; }
-  }))
-);
-
-export function getRandomWord(exclude?: string): string {
-  const pool = exclude ? WORD_LIST.filter(w => w !== exclude) : WORD_LIST;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-export function getTodayWord(): string {
+export function getTodayWord(wordList: string[]): string {
   const today = new Date();
   const dayIndex = Math.floor(
     (today.getTime() - new Date('2025-01-01').getTime()) / (1000 * 60 * 60 * 24)
   );
-  return WORD_LIST[((dayIndex % WORD_LIST.length) + WORD_LIST.length) % WORD_LIST.length];
+  return wordList[((dayIndex % wordList.length) + wordList.length) % wordList.length];
+}
+
+export function getRandomWord(wordList: string[], exclude?: string): string {
+  const pool = exclude ? wordList.filter(w => w !== exclude) : wordList;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
