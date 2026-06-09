@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
-import { loadReactionStats, updateReactionStats, ReactionStats } from '../../utils/reactionStorage';
+import {
+  loadReactionStats, updateReactionStats, fetchLeaderboard,
+  ReactionStats, LeaderboardEntry,
+} from '../../utils/reactionStorage';
 import InfoModal from '../../components/InfoModal';
 
 const ROUNDS = 5;
@@ -16,10 +19,11 @@ const REACTION_RULES = [
   { emoji: '⚡', text: '초록 되기 전에 탭하면 "너무 일찍!" — 해당 라운드는 무효예요.' },
   { emoji: '🔁', text: `총 ${ROUNDS}번 측정 후 평균 반응속도를 보여줘요.` },
   { emoji: '🏆', text: '평균 기록이 최고 기록보다 빠르면 갱신돼요!' },
-  { emoji: '💾', text: '기록은 Google 로그인 시 자동 저장돼요.' },
+  { emoji: '💾', text: '기록은 Google 로그인 시 자동 저장되고 랭킹에 등록돼요.' },
 ];
 
 type Phase = 'idle' | 'waiting' | 'go' | 'early' | 'result' | 'done';
+type Tab = 'game' | 'ranking';
 
 function getRating(ms: number): string {
   if (ms < 200) return '🐆 번개 반응!';
@@ -30,8 +34,16 @@ function getRating(ms: number): string {
   return '😴 많이 느림';
 }
 
+function getMedalEmoji(rank: number): string {
+  if (rank === 1) return '🥇';
+  if (rank === 2) return '🥈';
+  if (rank === 3) return '🥉';
+  return `${rank}.`;
+}
+
 export default function ReactionTestScreen() {
   const router = useRouter();
+  const [tab, setTab] = useState<Tab>('game');
   const [phase, setPhase] = useState<Phase>('idle');
   const [round, setRound] = useState(0);
   const [results, setResults] = useState<number[]>([]);
@@ -39,6 +51,8 @@ export default function ReactionTestScreen() {
   const [stats, setStats] = useState<ReactionStats>({ totalGames: 0, bestMs: 0, distribution: Array(10).fill(0) });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [rankLoading, setRankLoading] = useState(false);
 
   const startTime = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,6 +63,26 @@ export default function ReactionTestScreen() {
     supabase.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, []);
+
+  const loadLeaderboard = useCallback(async () => {
+    setRankLoading(true);
+    const data = await fetchLeaderboard();
+    setLeaderboard(data);
+    setRankLoading(false);
+  }, []);
+
+  const handleTabChange = useCallback((t: Tab) => {
+    setTab(t);
+    if (t === 'ranking') loadLeaderboard();
+    // 게임 탭으로 돌아오면 게임 중단
+    if (t === 'game' && (phase === 'waiting' || phase === 'go')) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setPhase('idle');
+      setResults([]);
+      setRound(0);
+      Animated.timing(bgAnim, { toValue: 0, duration: 80, useNativeDriver: false }).start();
+    }
+  }, [phase, bgAnim, loadLeaderboard]);
 
   const goToGreen = useCallback(() => {
     setPhase('go');
@@ -68,7 +102,6 @@ export default function ReactionTestScreen() {
     if (phase === 'idle' || phase === 'done') return;
 
     if (phase === 'waiting') {
-      // 너무 일찍
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       Animated.timing(bgAnim, { toValue: 0, duration: 80, useNativeDriver: false }).start();
       setPhase('early');
@@ -117,6 +150,51 @@ export default function ReactionTestScreen() {
 
   const isNewRecord = phase === 'done' && avg > 0 && (stats.bestMs === 0 || avg <= stats.bestMs);
 
+  // ── 랭킹 탭 ─────────────────────────────────────────────────────────────────
+  const RankingView = () => (
+    <ScrollView style={styles.rankingScroll} contentContainerStyle={styles.rankingContent}>
+      <Text style={styles.rankingTitle}>🏆 반응속도 랭킹 TOP 20</Text>
+      <Text style={styles.rankingSubtitle}>낮을수록 빨라요</Text>
+
+      {rankLoading ? (
+        <ActivityIndicator color="#A5D6A7" size="large" style={{ marginTop: 32 }} />
+      ) : leaderboard.length === 0 ? (
+        <View style={styles.emptyRank}>
+          <Text style={styles.emptyRankEmoji}>🎯</Text>
+          <Text style={styles.emptyRankText}>아직 기록이 없어요</Text>
+          <Text style={styles.emptyRankSub}>첫 번째 랭커가 되어보세요!</Text>
+        </View>
+      ) : (
+        <>
+          {leaderboard.map((entry) => (
+            <View
+              key={entry.rank}
+              style={[styles.rankRow, entry.isMe && styles.rankRowMe]}
+            >
+              <Text style={styles.rankMedal}>{getMedalEmoji(entry.rank)}</Text>
+              <View style={styles.rankInfo}>
+                <Text style={[styles.rankName, entry.isMe && styles.rankNameMe]}>
+                  {entry.username}{entry.isMe ? ' (나)' : ''}
+                </Text>
+                <Text style={styles.rankGames}>{entry.totalGames}회 플레이</Text>
+              </View>
+              <Text style={[styles.rankMs, entry.isMe && styles.rankMsMe]}>
+                {entry.bestMs}ms
+              </Text>
+            </View>
+          ))}
+          {!isLoggedIn && (
+            <Text style={styles.rankLoginNote}>🔒 로그인하면 랭킹에 등록돼요</Text>
+          )}
+        </>
+      )}
+
+      <TouchableOpacity style={styles.refreshBtn} onPress={loadLeaderboard}>
+        <Text style={styles.refreshBtnText}>↻ 새로고침</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
   return (
     <>
       <Stack.Screen
@@ -142,115 +220,157 @@ export default function ReactionTestScreen() {
         rules={REACTION_RULES}
       />
 
-      <Animated.View style={[styles.container, { backgroundColor: bgColor }]}>
-        <TouchableOpacity style={styles.tapArea} onPress={handleTap} activeOpacity={1}>
-
-          {/* 상단 통계 */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats.bestMs > 0 ? `${stats.bestMs}ms` : '-'}</Text>
-              <Text style={styles.statLabel}>최고 기록</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats.totalGames}</Text>
-              <Text style={styles.statLabel}>총 게임</Text>
-            </View>
-          </View>
-
-          {/* 라운드 진행 */}
-          {(phase !== 'idle' && phase !== 'done') && (
-            <View style={styles.roundRow}>
-              {Array(ROUNDS).fill(null).map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.roundDot,
-                    i < results.length && styles.roundDotDone,
-                    i === results.length && styles.roundDotActive,
-                  ]}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* 메인 메시지 */}
-          <View style={styles.center}>
-            {phase === 'idle' && (
-              <>
-                <Text style={styles.emoji}>⚡</Text>
-                <Text style={styles.mainText}>탭해서 시작</Text>
-                <Text style={styles.subText}>준비되면 탭하세요</Text>
-              </>
-            )}
-
-            {phase === 'waiting' && (
-              <>
-                <Text style={styles.emoji}>🔴</Text>
-                <Text style={styles.mainText}>기다리세요...</Text>
-                <Text style={styles.subText}>초록색이 되면 탭!</Text>
-              </>
-            )}
-
-            {phase === 'go' && (
-              <>
-                <Text style={styles.emoji}>🟢</Text>
-                <Text style={[styles.mainText, styles.goText]}>지금!</Text>
-                <Text style={styles.subText}>탭하세요!</Text>
-              </>
-            )}
-
-            {phase === 'early' && (
-              <>
-                <Text style={styles.emoji}>😅</Text>
-                <Text style={styles.mainText}>너무 일찍!</Text>
-                <Text style={styles.subText}>탭해서 다시 시도</Text>
-              </>
-            )}
-
-            {phase === 'result' && (
-              <>
-                <Text style={styles.emoji}>✅</Text>
-                <Text style={[styles.mainText, styles.resultMs]}>{lastMs}ms</Text>
-                <Text style={styles.subText}>탭해서 계속 ({round + 1}/{ROUNDS})</Text>
-              </>
-            )}
-
-            {phase === 'done' && (
-              <>
-                <Text style={styles.emoji}>{isNewRecord ? '🏆' : '🎯'}</Text>
-                <Text style={styles.mainText}>평균 {avg}ms</Text>
-                <Text style={styles.rating}>{getRating(avg)}</Text>
-                {isNewRecord && <Text style={styles.newRecord}>🎉 최고 기록 갱신!</Text>}
-                <View style={styles.resultList}>
-                  {results.map((ms, i) => (
-                    <Text key={i} style={styles.resultItem}>
-                      {i + 1}회: {ms}ms
-                    </Text>
-                  ))}
-                </View>
-                {!isLoggedIn && (
-                  <Text style={styles.guestNote}>🔒 로그인하면 기록이 저장돼요</Text>
-                )}
-              </>
-            )}
-          </View>
-
-          {/* 하단 버튼 */}
-          {(phase === 'idle' || phase === 'done') && (
-            <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.8}>
-              <Text style={styles.startButtonText}>
-                {phase === 'idle' ? '▶ 시작' : '🔄 다시 하기'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
+      {/* 탭 바 */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'game' && styles.tabBtnActive]}
+          onPress={() => handleTabChange('game')}
+        >
+          <Text style={[styles.tabText, tab === 'game' && styles.tabTextActive]}>게임</Text>
         </TouchableOpacity>
-      </Animated.View>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'ranking' && styles.tabBtnActive]}
+          onPress={() => handleTabChange('ranking')}
+        >
+          <Text style={[styles.tabText, tab === 'ranking' && styles.tabTextActive]}>🏆 랭킹</Text>
+        </TouchableOpacity>
+      </View>
+
+      {tab === 'ranking' ? (
+        <View style={styles.rankingContainer}>
+          <RankingView />
+        </View>
+      ) : (
+        <Animated.View style={[styles.container, { backgroundColor: bgColor }]}>
+          <TouchableOpacity style={styles.tapArea} onPress={handleTap} activeOpacity={1}>
+
+            {/* 상단 통계 */}
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{stats.bestMs > 0 ? `${stats.bestMs}ms` : '-'}</Text>
+                <Text style={styles.statLabel}>최고 기록</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{stats.totalGames}</Text>
+                <Text style={styles.statLabel}>총 게임</Text>
+              </View>
+            </View>
+
+            {/* 라운드 진행 */}
+            {(phase !== 'idle' && phase !== 'done') && (
+              <View style={styles.roundRow}>
+                {Array(ROUNDS).fill(null).map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.roundDot,
+                      i < results.length && styles.roundDotDone,
+                      i === results.length && styles.roundDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* 메인 메시지 */}
+            <View style={styles.center}>
+              {phase === 'idle' && (
+                <>
+                  <Text style={styles.emoji}>⚡</Text>
+                  <Text style={styles.mainText}>탭해서 시작</Text>
+                  <Text style={styles.subText}>준비되면 탭하세요</Text>
+                </>
+              )}
+              {phase === 'waiting' && (
+                <>
+                  <Text style={styles.emoji}>🔴</Text>
+                  <Text style={styles.mainText}>기다리세요...</Text>
+                  <Text style={styles.subText}>초록색이 되면 탭!</Text>
+                </>
+              )}
+              {phase === 'go' && (
+                <>
+                  <Text style={styles.emoji}>🟢</Text>
+                  <Text style={[styles.mainText, styles.goText]}>지금!</Text>
+                  <Text style={styles.subText}>탭하세요!</Text>
+                </>
+              )}
+              {phase === 'early' && (
+                <>
+                  <Text style={styles.emoji}>😅</Text>
+                  <Text style={styles.mainText}>너무 일찍!</Text>
+                  <Text style={styles.subText}>탭해서 다시 시도</Text>
+                </>
+              )}
+              {phase === 'result' && (
+                <>
+                  <Text style={styles.emoji}>✅</Text>
+                  <Text style={[styles.mainText, styles.resultMs]}>{lastMs}ms</Text>
+                  <Text style={styles.subText}>탭해서 계속 ({round + 1}/{ROUNDS})</Text>
+                </>
+              )}
+              {phase === 'done' && (
+                <>
+                  <Text style={styles.emoji}>{isNewRecord ? '🏆' : '🎯'}</Text>
+                  <Text style={styles.mainText}>평균 {avg}ms</Text>
+                  <Text style={styles.rating}>{getRating(avg)}</Text>
+                  {isNewRecord && <Text style={styles.newRecord}>🎉 최고 기록 갱신!</Text>}
+                  <View style={styles.resultList}>
+                    {results.map((ms, i) => (
+                      <Text key={i} style={styles.resultItem}>{i + 1}회: {ms}ms</Text>
+                    ))}
+                  </View>
+                  {isNewRecord && isLoggedIn && (
+                    <TouchableOpacity onPress={() => handleTabChange('ranking')} style={styles.viewRankBtn}>
+                      <Text style={styles.viewRankBtnText}>🏆 랭킹 확인하기</Text>
+                    </TouchableOpacity>
+                  )}
+                  {!isLoggedIn && (
+                    <Text style={styles.guestNote}>🔒 로그인하면 랭킹에 등록돼요</Text>
+                  )}
+                </>
+              )}
+            </View>
+
+            {(phase === 'idle' || phase === 'done') && (
+              <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.8}>
+                <Text style={styles.startButtonText}>
+                  {phase === 'idle' ? '▶ 시작' : '🔄 다시 하기'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#1A1A1B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#A5D6A7',
+  },
+  tabText: {
+    color: '#818384',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#A5D6A7',
+  },
   container: {
     flex: 1,
   },
@@ -266,9 +386,7 @@ const styles = StyleSheet.create({
     gap: 40,
     marginBottom: 16,
   },
-  statBox: {
-    alignItems: 'center',
-  },
+  statBox: { alignItems: 'center' },
   statValue: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 22,
@@ -285,68 +403,46 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   roundDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 12, height: 12, borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  roundDotDone: {
-    backgroundColor: 'rgba(255,255,255,0.8)',
-  },
-  roundDotActive: {
-    backgroundColor: '#FDD835',
-  },
+  roundDotDone: { backgroundColor: 'rgba(255,255,255,0.8)' },
+  roundDotActive: { backgroundColor: '#FDD835' },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
   },
-  emoji: {
-    fontSize: 64,
-    marginBottom: 8,
-  },
+  emoji: { fontSize: 64, marginBottom: 8 },
   mainText: {
     color: '#fff',
     fontSize: 36,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  goText: {
-    fontSize: 48,
-    color: '#A5D6A7',
-  },
-  resultMs: {
-    fontSize: 48,
-    color: '#FDD835',
-  },
+  goText: { fontSize: 48, color: '#A5D6A7' },
+  resultMs: { fontSize: 48, color: '#FDD835' },
   subText: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 15,
     textAlign: 'center',
     marginTop: 4,
   },
-  rating: {
-    color: '#FDD835',
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  newRecord: {
-    color: '#A5D6A7',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  resultList: {
+  rating: { color: '#FDD835', fontSize: 20, fontWeight: '600', marginTop: 4 },
+  newRecord: { color: '#A5D6A7', fontSize: 16, fontWeight: '700', marginTop: 4 },
+  resultList: { marginTop: 16, gap: 4, alignItems: 'center' },
+  resultItem: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
+  viewRankBtn: {
     marginTop: 16,
-    gap: 4,
-    alignItems: 'center',
+    backgroundColor: 'rgba(165,214,167,0.2)',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(165,214,167,0.4)',
   },
-  resultItem: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-  },
+  viewRankBtnText: { color: '#A5D6A7', fontSize: 14, fontWeight: '700' },
   guestNote: {
     color: 'rgba(255,255,255,0.4)',
     fontSize: 12,
@@ -360,9 +456,82 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  startButtonText: {
+  startButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+
+  // 랭킹 탭
+  rankingContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+  },
+  rankingScroll: { flex: 1 },
+  rankingContent: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  rankingTitle: {
     color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  rankingSubtitle: {
+    color: '#818384',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A1A1B',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+  },
+  rankRowMe: {
+    borderColor: '#A5D6A7',
+    backgroundColor: '#1A2E1A',
+  },
+  rankMedal: {
+    fontSize: 20,
+    width: 36,
+    textAlign: 'center',
+  },
+  rankInfo: { flex: 1, marginLeft: 8 },
+  rankName: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  rankNameMe: { color: '#A5D6A7' },
+  rankGames: { color: '#818384', fontSize: 12, marginTop: 2 },
+  rankMs: {
+    color: '#FDD835',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  rankMsMe: { color: '#A5D6A7' },
+  emptyRank: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    gap: 8,
+  },
+  emptyRankEmoji: { fontSize: 48 },
+  emptyRankText: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  emptyRankSub: { color: '#818384', fontSize: 13 },
+  rankLoginNote: {
+    color: '#818384',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  refreshBtn: {
+    marginTop: 20,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  refreshBtnText: {
+    color: '#818384',
+    fontSize: 14,
   },
 });

@@ -2,8 +2,16 @@ import { supabase } from './supabase';
 
 export interface ReactionStats {
   totalGames: number;
-  bestMs: number;       // 최고 기록 (낮을수록 좋음, 0 = 기록 없음)
-  distribution: number[]; // 구간별 게임 수 (0~100, 100~200, ..., 900~1000ms)
+  bestMs: number;
+  distribution: number[];
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  bestMs: number;
+  totalGames: number;
+  isMe: boolean;
 }
 
 const GAME_TYPE = 'reaction-test';
@@ -24,6 +32,13 @@ async function getCurrentUser() {
   return user;
 }
 
+function formatUsername(email: string | undefined): string {
+  if (!email) return '익명';
+  // 이메일에서 @ 앞부분만 사용, 너무 길면 자름
+  const local = email.split('@')[0];
+  return local.length > 12 ? local.slice(0, 12) + '…' : local;
+}
+
 async function loadRemoteStats(userId: string): Promise<ReactionStats | null> {
   const { data, error } = await supabase
     .from('game_stats')
@@ -36,12 +51,12 @@ async function loadRemoteStats(userId: string): Promise<ReactionStats | null> {
 
   return {
     totalGames: data.total_games,
-    bestMs: data.wins,           // wins 컬럼에 bestMs 저장
+    bestMs: data.wins,
     distribution: data.distribution ?? Array(10).fill(0),
   };
 }
 
-async function saveRemoteStats(userId: string, stats: ReactionStats, lastMs: number): Promise<void> {
+async function saveRemoteStats(userId: string, stats: ReactionStats, lastMs: number, username: string): Promise<void> {
   await supabase.from('game_stats').upsert({
     user_id: userId,
     game_type: GAME_TYPE,
@@ -53,6 +68,7 @@ async function saveRemoteStats(userId: string, stats: ReactionStats, lastMs: num
     last_played_date: getTodayDate(),
     last_played_won: true,
     updated_at: new Date().toISOString(),
+    username,
   }, { onConflict: 'user_id,game_type' });
 }
 
@@ -70,12 +86,36 @@ export async function updateReactionStats(avgMs: number): Promise<ReactionStats>
   stats.totalGames += 1;
   if (stats.bestMs === 0 || avgMs < stats.bestMs) stats.bestMs = avgMs;
 
-  // 구간 분류: 0~99ms=0, 100~199ms=1, ..., 900ms+=9
   const idx = Math.min(Math.floor(avgMs / 100), 9);
   stats.distribution[idx] = (stats.distribution[idx] || 0) + 1;
 
   const user = await getCurrentUser();
-  if (user) await saveRemoteStats(user.id, stats, avgMs);
+  if (user) {
+    const username = formatUsername(user.email ?? '');
+    await saveRemoteStats(user.id, stats, avgMs, username);
+  }
 
   return stats;
+}
+
+export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
+  const user = await getCurrentUser();
+
+  const { data, error } = await supabase
+    .from('game_stats')
+    .select('user_id, username, wins, total_games')
+    .eq('game_type', GAME_TYPE)
+    .gt('wins', 0)           // 기록이 있는 유저만
+    .order('wins', { ascending: true })  // bestMs 낮을수록 좋음
+    .limit(20);
+
+  if (error || !data) return [];
+
+  return data.map((row, i) => ({
+    rank: i + 1,
+    username: row.username ?? '익명',
+    bestMs: row.wins,
+    totalGames: row.total_games,
+    isMe: !!user && row.user_id === user.id,
+  }));
 }
