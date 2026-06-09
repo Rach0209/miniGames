@@ -104,6 +104,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/pattern-memory')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🔲</Text>
+          <View>
+            <Text style={styles.gameName}>패턴 기억 게임</Text>
+            <Text style={styles.gameDesc}>깜박이는 순서를 기억하고 탭하세요 (4×4~10×10)</Text>
+          </View>
+        </TouchableOpacity>
+
       </View>
     </>
   );
