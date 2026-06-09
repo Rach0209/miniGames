@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,6 +45,13 @@ export default function ColorMemoryScreen() {
   const [showInfo, setShowInfo] = useState(false);
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
   const scaleAnims = useRef(COLORS.map(() => new Animated.Value(1)));
+
+  const { width: screenWidth } = useWindowDimensions();
+  const TILE_GAP = 16;
+  const H_PAD = 40;
+  const availW = Math.min(screenWidth, 900) - H_PAD;
+  const cols = availW / 3 >= 100 ? 3 : 2;
+  const tileSize = Math.min(160, Math.floor((availW - TILE_GAP * (cols - 1)) / cols));
 
   useEffect(() => {
     loadColorMemoryStats().then(setStats);
@@ -209,13 +216,13 @@ export default function ColorMemoryScreen() {
             )}
           </View>
 
-          <View style={styles.grid}>
+          <View style={[styles.grid, { gap: TILE_GAP, width: cols * tileSize + TILE_GAP * (cols - 1) }]}>
             {COLORS.map((color) => (
               <Animated.View
                 key={color.id}
                 style={[
                   styles.colorTileWrapper,
-                  { transform: [{ scale: scaleAnims.current[color.id] }] },
+                  { width: tileSize, height: tileSize, transform: [{ scale: scaleAnims.current[color.id] }] },
                 ]}
               >
                 <TouchableOpacity
@@ -333,13 +340,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
-    justifyContent: 'center',
     marginBottom: 32,
+    alignSelf: 'center',
   },
   colorTileWrapper: {
-    width: 120,
-    height: 120,
+    // width/height set dynamically via tileSize
   },
   colorTile: {
     flex: 1,

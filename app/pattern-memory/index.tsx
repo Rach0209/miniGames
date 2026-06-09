@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
@@ -10,10 +11,8 @@ import InfoModal from '../../components/InfoModal';
 import LeaderboardView from '../../components/LeaderboardView';
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
-const GRID_OPTIONS = [4, 5, 6, 7, 8, 9, 10];
+const GRID_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 10];
 const GAP = 4;
-const { width: SCREEN_W } = Dimensions.get('window');
-const BOARD_SIZE = Math.min(SCREEN_W - 32, 380);
 
 const COLOR_OFF = '#3A3A3C';
 const COLOR_ON  = '#FFD700';
@@ -36,6 +35,19 @@ const RULES_PATTERN = [
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────────
 export default function PatternMemoryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const effectiveW = Math.min(screenWidth, 1600);
+  const BOARD_SIZE = Math.min(effectiveW - 32, effectiveW * 0.65);
+
+  // 반응형 그리드 선택 버튼
+  const GRID_BTN_GAP = 16;
+  const containerW = Math.min(effectiveW - 48, BOARD_SIZE);
+  const cols = Math.min(
+    GRID_OPTIONS.length,
+    Math.max(2, Math.floor((containerW + GRID_BTN_GAP) / (80 + GRID_BTN_GAP)))
+  );
+  const GRID_BTN_SIZE = Math.min(180, Math.floor((containerW - GRID_BTN_GAP * (cols - 1)) / cols));
   const [gridSize, setGridSize] = useState(4);
   const [phase, setPhase] = useState<Phase>('idle');
   const [sequence, setSequence] = useState<number[]>([]);
@@ -214,7 +226,11 @@ export default function PatternMemoryScreen() {
           />
         </View>
       ) : (
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={[styles.container, { paddingBottom: Math.max(insets.bottom, 24) }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* 상단 정보 */}
         {phase !== 'idle' && (
           <View style={styles.infoRow}>
@@ -300,15 +316,15 @@ export default function PatternMemoryScreen() {
             <Text style={styles.idleDesc}>그리드 크기를 선택하세요</Text>
             <Text style={styles.idleHighScore}>최고 라운드: {stats.highScore > 0 ? `${stats.highScore}라운드` : '기록 없음'}</Text>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.gridOptions}
-            >
+            <View style={[styles.gridOptions, { gap: GRID_BTN_GAP, width: containerW }]}>
               {GRID_OPTIONS.map(size => (
                 <TouchableOpacity
                   key={size}
-                  style={[styles.gridOption, gridSize === size && styles.gridOptionSelected]}
+                  style={[
+                    styles.gridOption,
+                    { width: GRID_BTN_SIZE, height: GRID_BTN_SIZE },
+                    gridSize === size && styles.gridOptionSelected,
+                  ]}
                   onPress={() => setGridSize(size)}
                   activeOpacity={0.7}
                 >
@@ -320,7 +336,7 @@ export default function PatternMemoryScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
 
             <TouchableOpacity style={styles.startBtn} onPress={() => startGame(gridSize)} activeOpacity={0.8}>
               <Text style={styles.startBtnText}>시작</Text>
@@ -331,7 +347,7 @@ export default function PatternMemoryScreen() {
             )}
           </View>
         )}
-      </View>
+      </ScrollView>
       )}
     </>
   );
@@ -365,9 +381,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#121213',
   },
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: '#121213',
+  },
+  container: {
+    flexGrow: 1,
     alignItems: 'center',
     paddingTop: 16,
     paddingBottom: 24,
@@ -431,7 +450,8 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: 'center',
     gap: 10,
-    width: BOARD_SIZE,
+    width: '100%',
+    maxWidth: 560,
     borderWidth: 1,
     borderColor: '#3A3A3C',
   },
@@ -456,6 +476,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 32,
     width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
     paddingHorizontal: 16,
   },
   idleTitle: {
@@ -477,21 +499,15 @@ const styles = StyleSheet.create({
   },
   gridOptions: {
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 4,
-    paddingBottom: 4,
+    flexWrap: 'wrap',
     marginBottom: 32,
-    alignItems: 'center',
+    alignSelf: 'center',
   },
   gridOption: {
     backgroundColor: '#2C2C2E',
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 72,
-    height: 72,
     borderWidth: 2,
     borderColor: 'transparent',
   },

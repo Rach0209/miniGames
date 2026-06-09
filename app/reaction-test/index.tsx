@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
@@ -38,6 +39,7 @@ function getRating(ms: number): string {
 
 export default function ReactionTestScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('game');
   const [phase, setPhase] = useState<Phase>('idle');
   const [round, setRound] = useState(0);
@@ -190,7 +192,11 @@ export default function ReactionTestScreen() {
         </View>
       ) : (
         <Animated.View style={[styles.container, { backgroundColor: bgColor }]}>
-          <TouchableOpacity style={styles.tapArea} onPress={handleTap} activeOpacity={1}>
+          <TouchableOpacity
+            style={[styles.tapArea, { paddingBottom: Math.max(insets.bottom, 48) }]}
+            onPress={handleTap}
+            activeOpacity={1}
+          >
 
             {/* 상단 통계 */}
             <View style={styles.statsRow}>

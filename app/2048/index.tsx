@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, PanResponder, Dimensions, Animated,
+  View, Text, StyleSheet, TouchableOpacity, PanResponder, Dimensions, Animated, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
@@ -174,6 +175,7 @@ function moveTiles(tiles: TileData[], dir: Direction): MoveResult {
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────────
 export default function Game2048Screen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [tiles, setTiles] = useState<TileData[]>([]);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
@@ -390,7 +392,11 @@ export default function Game2048Screen() {
           />
         </View>
       ) : (
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={[styles.container, { paddingBottom: Math.max(insets.bottom, 24) }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* 점수 */}
         <View style={styles.scoreRow}>
           <ScoreBox label="점수" value={score} />
@@ -486,8 +492,8 @@ export default function Game2048Screen() {
         {!isLoggedIn && (
           <Text style={styles.guestNote}>🔒 로그인하면 최고 점수가 저장돼요</Text>
         )}
-      </View>
-      )}
+      </ScrollView>
+)}
     </>
   );
 }
@@ -529,9 +535,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#121213',
   },
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: '#faf8ef',
+  },
+  container: {
+    flexGrow: 1,
     alignItems: 'center',
     paddingTop: 20,
     paddingBottom: 24,

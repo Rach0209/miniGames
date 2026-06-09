@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { View, ScrollView, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signInWithGoogle, signOut, onAuthStateChange } from '../utils/supabase';
 import type { User } from '@supabase/supabase-js';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const { data: { subscription } } = onAuthStateChange((u) => setUser(u));
@@ -28,7 +30,11 @@ export default function HomeScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Baek's test Games", headerBackVisible: false, headerLeft: () => null }} />
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.container, { paddingBottom: Math.max(insets.bottom, 24) }]}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* 상단 GitHub + 로그인 버튼 */}
         <View style={styles.topRow}>
@@ -62,7 +68,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.gameEmoji}>🔤</Text>
-          <View>
+          <View style={styles.cardInfo}>
             <Text style={styles.gameName}>단어 맞추기 게임</Text>
             <Text style={styles.gameDesc}>5자모로 2글자 한국어 단어 맞추기</Text>
           </View>
@@ -74,7 +80,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.gameEmoji}>🎨</Text>
-          <View>
+          <View style={styles.cardInfo}>
             <Text style={styles.gameName}>색상 기억 게임</Text>
             <Text style={styles.gameDesc}>색상 순서를 기억하고 따라 탭하세요</Text>
           </View>
@@ -86,7 +92,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.gameEmoji}>⚡</Text>
-          <View>
+          <View style={styles.cardInfo}>
             <Text style={styles.gameName}>반응속도 테스트</Text>
             <Text style={styles.gameDesc}>초록색으로 바뀌는 순간 탭하세요!</Text>
           </View>
@@ -98,7 +104,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.gameEmoji}>🔢</Text>
-          <View>
+          <View style={styles.cardInfo}>
             <Text style={styles.gameName}>2048</Text>
             <Text style={styles.gameDesc}>타일을 합쳐 2048을 만드세요!</Text>
           </View>
@@ -110,21 +116,24 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.gameEmoji}>🔲</Text>
-          <View>
+          <View style={styles.cardInfo}>
             <Text style={styles.gameName}>패턴 기억 게임</Text>
             <Text style={styles.gameDesc}>깜박이는 순서를 기억하고 탭하세요 (4×4~10×10)</Text>
           </View>
         </TouchableOpacity>
 
-      </View>
+      </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
     backgroundColor: '#121213',
+  },
+  container: {
+    flexGrow: 1,
     padding: 24,
     paddingTop: 48,
   },
@@ -184,6 +193,11 @@ const styles = StyleSheet.create({
   },
   gameEmoji: {
     fontSize: 40,
+    flexShrink: 0,
+  },
+  cardInfo: {
+    flex: 1,
+    flexShrink: 1,
   },
   gameName: {
     color: '#fff',

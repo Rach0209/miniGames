@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 import { TileStatus } from '../utils/gameLogic';
 
 interface Props {
@@ -27,7 +27,13 @@ const TILE_BORDER_COLORS: Record<TileStatus, string> = {
   active: '#999',
 };
 
+const TILE_GAP = 6;
+const MAX_TILE = 58;
+const H_PADDING = 32; // 부모 컨테이너 좌우 패딩 합계
+
 export default function GameBoard({ guesses, statuses, currentGuess, currentRow, wordLength, animatingRow }: Props) {
+  const { width: screenWidth } = useWindowDimensions();
+  const TILE_SIZE = Math.min(MAX_TILE, Math.floor((screenWidth - H_PADDING - TILE_GAP * (wordLength - 1)) / wordLength));
   const animValues = useRef(Array(wordLength).fill(null).map(() => new Animated.Value(1)));
   const [flippedCount, setFlippedCount] = useState(-1);
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -98,13 +104,15 @@ export default function GameBoard({ guesses, statuses, currentGuess, currentRow,
                   style={[
                     styles.tile,
                     {
+                      width: TILE_SIZE,
+                      height: TILE_SIZE,
                       backgroundColor: TILE_COLORS[status],
                       borderColor: TILE_BORDER_COLORS[status],
                       transform: [{ scaleY }],
                     },
                   ]}
                 >
-                  <Text style={styles.tileText}>{jamo}</Text>
+                  <Text style={[styles.tileText, { fontSize: Math.max(16, TILE_SIZE * 0.4) }]}>{jamo}</Text>
                 </Animated.View>
               );
             })}
@@ -115,25 +123,19 @@ export default function GameBoard({ guesses, statuses, currentGuess, currentRow,
   );
 }
 
-const TILE_SIZE = 58;
-const BOARD_MAX = TILE_SIZE * 5 + 6 * 4;
-
 const styles = StyleSheet.create({
   board: {
-    gap: 6,
+    gap: TILE_GAP,
     alignItems: 'center',
     marginVertical: 16,
     width: '100%',
-    maxWidth: BOARD_MAX,
     alignSelf: 'center',
   },
   row: {
     flexDirection: 'row',
-    gap: 6,
+    gap: TILE_GAP,
   },
   tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
     borderWidth: 2,
     borderRadius: 4,
     justifyContent: 'center',
@@ -141,7 +143,6 @@ const styles = StyleSheet.create({
   },
   tileText: {
     color: '#fff',
-    fontSize: 24,
     fontWeight: 'bold',
   },
 });
