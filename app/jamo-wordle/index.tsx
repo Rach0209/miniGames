@@ -5,6 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 import GameBoard from '../../components/GameBoard';
 import JamoKeyboard from '../../components/JamoKeyboard';
 import StatsModal from '../../components/StatsModal';
+import InfoModal from '../../components/InfoModal';
+
+const JAMO_WORDLE_RULES = [
+  { emoji: '🔤', text: '5개의 자모(자음+모음)를 입력해서 2글자 한국어 단어를 맞추세요.' },
+  { emoji: '🟩', text: '초록색 — 자모가 정확한 위치에 있어요.' },
+  { emoji: '🟨', text: '노란색 — 자모가 단어에 있지만 위치가 달라요.' },
+  { emoji: '⬛', text: '회색 — 자모가 단어에 없어요.' },
+  { emoji: '📅', text: '오늘의 단어는 하루 1번만 플레이할 수 있어요.' },
+  { emoji: '🎲', text: '자유 모드에서는 제한 없이 새 단어를 계속 풀 수 있어요.' },
+  { emoji: '💾', text: '통계는 Google 로그인 시 자동 저장돼요.' },
+];
 import { evaluateGuess, isValidKeystroke, TileStatus } from '../../utils/gameLogic';
 import { decomposeToKeystrokes } from '../../utils/jamo';
 import { updateStats, GameStats, loadStats, loadTodayStatus } from '../../utils/storage';
@@ -33,6 +44,8 @@ export default function JamoWordleScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [animatingRow, setAnimatingRow] = useState(-1);
   const [stats, setStats] = useState<GameStats>({ totalGames: 0, wins: 0, currentStreak: 0, maxStreak: 0, distribution: [0,0,0,0,0] });
   const [keyStatuses, setKeyStatuses] = useState<Record<string, TileStatus>>({});
   const [errorMsg, setErrorMsg] = useState('');
@@ -130,6 +143,7 @@ export default function JamoWordleScreen() {
       setStatuses(newStatuses);
       updateKeyStatuses(currentGuess, result);
       setCurrentGuess([]);
+      setAnimatingRow(newGuesses.length - 1);
 
       const isWon = result.every(s => s === 'correct');
       const isOver = isWon || newGuesses.length >= MAX_TRIES;
@@ -206,7 +220,19 @@ export default function JamoWordleScreen() {
                 <Ionicons name="home-outline" size={22} color="#fff" />
               </TouchableOpacity>
             ),
+            headerRight: () => (
+              <TouchableOpacity onPress={() => setShowInfo(true)} style={{ paddingHorizontal: 8 }}>
+                <Ionicons name="information-circle-outline" size={24} color="#fff" />
+              </TouchableOpacity>
+            ),
           }}
+        />
+        <InfoModal
+          visible={showInfo}
+          onClose={() => setShowInfo(false)}
+          title="단어 맞추기 게임"
+          description="5개의 자모로 2글자 한국어 단어를 맞춰보세요!"
+          rules={JAMO_WORDLE_RULES}
         />
         <View style={styles.doneContainer}>
           <Text style={styles.doneEmoji}>{todayWon ? '🎉' : '😅'}</Text>
@@ -232,7 +258,19 @@ export default function JamoWordleScreen() {
               <Ionicons name="home-outline" size={22} color="#fff" />
             </TouchableOpacity>
           ),
+          headerRight: () => (
+            <TouchableOpacity onPress={() => setShowInfo(true)} style={{ paddingHorizontal: 8 }}>
+              <Ionicons name="information-circle-outline" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
         }}
+      />
+      <InfoModal
+        visible={showInfo}
+        onClose={() => setShowInfo(false)}
+        title="단어 맞추기 게임"
+        description="5개의 자모로 2글자 한국어 단어를 맞춰보세요!"
+        rules={JAMO_WORDLE_RULES}
       />
       <ScrollView
         style={styles.container}
@@ -267,6 +305,7 @@ export default function JamoWordleScreen() {
           currentGuess={currentGuess}
           currentRow={guesses.length}
           wordLength={WORD_LENGTH}
+          animatingRow={animatingRow}
         />
 
         <JamoKeyboard onKey={handleKey} keyStatuses={keyStatuses} />
@@ -290,6 +329,8 @@ export default function JamoWordleScreen() {
           won={won}
           attempts={guesses.length}
           answer={targetWord}
+          guesses={guesses}
+          statuses={statuses}
         />
       </ScrollView>
     </>

@@ -68,6 +68,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/color-memory')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🎨</Text>
+          <View>
+            <Text style={styles.gameName}>색상 기억 게임</Text>
+            <Text style={styles.gameDesc}>색상 순서를 기억하고 따라 탭하세요</Text>
+          </View>
+        </TouchableOpacity>
+
       </View>
     </>
   );

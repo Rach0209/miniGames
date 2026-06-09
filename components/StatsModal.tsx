@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { GameStats } from '../utils/storage';
+import { TileStatus } from '../utils/gameLogic';
 
 interface Props {
   visible: boolean;
@@ -9,9 +11,30 @@ interface Props {
   won: boolean;
   attempts: number;
   answer: string;
+  guesses?: string[][];
+  statuses?: TileStatus[][];
 }
 
-export default function StatsModal({ visible, onClose, stats, won, attempts, answer }: Props) {
+function generateShareText(statuses: TileStatus[][], attempts: number, won: boolean): string {
+  const d = new Date();
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const result = won ? `${attempts}/5` : 'X/5';
+  const grid = statuses.map(row =>
+    row.map(s => s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛').join('')
+  ).join('\n');
+  return `자모워들 ${date}\n${result}\n${grid}`;
+}
+
+export default function StatsModal({ visible, onClose, stats, won, attempts, answer, guesses, statuses }: Props) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!statuses) return;
+    const text = generateShareText(statuses, attempts, won);
+    await Clipboard.setStringAsync(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
   const accuracy = stats.totalGames > 0
     ? Math.round((stats.wins / stats.totalGames) * 100)
     : 0;
@@ -46,6 +69,12 @@ export default function StatsModal({ visible, onClose, stats, won, attempts, ans
               </View>
             </View>
           ))}
+
+          {statuses && statuses.length > 0 && (
+            <TouchableOpacity style={styles.shareButton} onPress={handleCopy}>
+              <Text style={styles.shareButtonText}>{copied ? '복사됨! ✓' : '📋 클립보드에 복사'}</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={styles.button} onPress={onClose}>
             <Text style={styles.buttonText}>계속하기</Text>
@@ -156,11 +185,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'right',
   },
+  shareButton: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+  },
+  shareButtonText: {
+    color: '#A8A8B3',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   button: {
     backgroundColor: '#538D4E',
     borderRadius: 8,
     paddingVertical: 14,
-    marginTop: 20,
+    marginTop: 10,
     alignItems: 'center',
   },
   buttonText: {
