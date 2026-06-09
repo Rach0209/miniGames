@@ -420,6 +420,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingBottom: 4,
     marginBottom: 32,
+    alignItems: 'center',
   },
   gridOption: {
     backgroundColor: '#2C2C2E',
@@ -427,7 +428,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: 'center',
-    minWidth: 68,
+    justifyContent: 'center',
+    width: 72,
+    height: 72,
     borderWidth: 2,
     borderColor: 'transparent',
   },
