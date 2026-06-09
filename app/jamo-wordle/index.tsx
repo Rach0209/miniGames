@@ -6,6 +6,9 @@ import GameBoard from '../../components/GameBoard';
 import JamoKeyboard from '../../components/JamoKeyboard';
 import StatsModal from '../../components/StatsModal';
 import InfoModal from '../../components/InfoModal';
+import LeaderboardView from '../../components/LeaderboardView';
+
+const JAMO_WORDLE_ACCENT = '#538D4E';
 
 const JAMO_WORDLE_RULES = [
   { emoji: '🔤', text: '5개의 자모(자음+모음)를 입력해서 2글자 한국어 단어를 맞추세요.' },
@@ -26,6 +29,7 @@ const WORD_LENGTH = 5;
 const MAX_TRIES = 5;
 
 type GameMode = 'daily' | 'free';
+type Tab = 'game' | 'ranking';
 
 export default function JamoWordleScreen() {
   const router = useRouter();
@@ -53,6 +57,7 @@ export default function JamoWordleScreen() {
   const [todayWon, setTodayWon] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showGuestNotice, setShowGuestNotice] = useState(false);
+  const [tab, setTab] = useState<Tab>('game');
 
   // 단어 목록 + 초기 상태 로딩
   useEffect(() => {
@@ -272,6 +277,35 @@ export default function JamoWordleScreen() {
         description="5개의 자모로 2글자 한국어 단어를 맞춰보세요!"
         rules={JAMO_WORDLE_RULES}
       />
+
+      {/* 탭 바 */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'game' && styles.tabBtnActive]}
+          onPress={() => setTab('game')}
+        >
+          <Text style={[styles.tabText, tab === 'game' && styles.tabTextActive]}>게임</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'ranking' && styles.tabBtnActive]}
+          onPress={() => setTab('ranking')}
+        >
+          <Text style={[styles.tabText, tab === 'ranking' && styles.tabTextActive]}>🏆 랭킹</Text>
+        </TouchableOpacity>
+      </View>
+
+      {tab === 'ranking' ? (
+        <View style={styles.rankingContainer}>
+          <LeaderboardView
+            gameType="jamo-wordle"
+            ascending={false}
+            valueFormatter={v => `${v}승`}
+            subtitle="승리 횟수 기준"
+            accentColor={JAMO_WORDLE_ACCENT}
+            isLoggedIn={isLoggedIn}
+          />
+        </View>
+      ) : (
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -333,11 +367,39 @@ export default function JamoWordleScreen() {
           statuses={statuses}
         />
       </ScrollView>
+      )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#1A1A1B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: JAMO_WORDLE_ACCENT,
+  },
+  tabText: {
+    color: '#818384',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: JAMO_WORDLE_ACCENT,
+  },
+  rankingContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+  },
   container: {
     flex: 1,
     backgroundColor: '#121213',

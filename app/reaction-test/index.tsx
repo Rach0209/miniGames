@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
 import {
-  loadReactionStats, updateReactionStats, fetchLeaderboard,
-  ReactionStats, LeaderboardEntry,
+  loadReactionStats, updateReactionStats,
+  ReactionStats,
 } from '../../utils/reactionStorage';
+import LeaderboardView from '../../components/LeaderboardView';
 import InfoModal from '../../components/InfoModal';
 
 const ROUNDS = 5;
@@ -34,12 +35,6 @@ function getRating(ms: number): string {
   return '😴 많이 느림';
 }
 
-function getMedalEmoji(rank: number): string {
-  if (rank === 1) return '🥇';
-  if (rank === 2) return '🥈';
-  if (rank === 3) return '🥉';
-  return `${rank}.`;
-}
 
 export default function ReactionTestScreen() {
   const router = useRouter();
@@ -51,8 +46,6 @@ export default function ReactionTestScreen() {
   const [stats, setStats] = useState<ReactionStats>({ totalGames: 0, bestMs: 0, distribution: Array(10).fill(0) });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [rankLoading, setRankLoading] = useState(false);
 
   const startTime = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,16 +57,8 @@ export default function ReactionTestScreen() {
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, []);
 
-  const loadLeaderboard = useCallback(async () => {
-    setRankLoading(true);
-    const data = await fetchLeaderboard();
-    setLeaderboard(data);
-    setRankLoading(false);
-  }, []);
-
   const handleTabChange = useCallback((t: Tab) => {
     setTab(t);
-    if (t === 'ranking') loadLeaderboard();
     // 게임 탭으로 돌아오면 게임 중단
     if (t === 'game' && (phase === 'waiting' || phase === 'go')) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -150,50 +135,6 @@ export default function ReactionTestScreen() {
 
   const isNewRecord = phase === 'done' && avg > 0 && (stats.bestMs === 0 || avg <= stats.bestMs);
 
-  // ── 랭킹 탭 ─────────────────────────────────────────────────────────────────
-  const RankingView = () => (
-    <ScrollView style={styles.rankingScroll} contentContainerStyle={styles.rankingContent}>
-      <Text style={styles.rankingTitle}>🏆 반응속도 랭킹 TOP 20</Text>
-      <Text style={styles.rankingSubtitle}>낮을수록 빨라요</Text>
-
-      {rankLoading ? (
-        <ActivityIndicator color="#A5D6A7" size="large" style={{ marginTop: 32 }} />
-      ) : leaderboard.length === 0 ? (
-        <View style={styles.emptyRank}>
-          <Text style={styles.emptyRankEmoji}>🎯</Text>
-          <Text style={styles.emptyRankText}>아직 기록이 없어요</Text>
-          <Text style={styles.emptyRankSub}>첫 번째 랭커가 되어보세요!</Text>
-        </View>
-      ) : (
-        <>
-          {leaderboard.map((entry) => (
-            <View
-              key={entry.rank}
-              style={[styles.rankRow, entry.isMe && styles.rankRowMe]}
-            >
-              <Text style={styles.rankMedal}>{getMedalEmoji(entry.rank)}</Text>
-              <View style={styles.rankInfo}>
-                <Text style={[styles.rankName, entry.isMe && styles.rankNameMe]}>
-                  {entry.username}{entry.isMe ? ' (나)' : ''}
-                </Text>
-                <Text style={styles.rankGames}>{entry.totalGames}회 플레이</Text>
-              </View>
-              <Text style={[styles.rankMs, entry.isMe && styles.rankMsMe]}>
-                {entry.bestMs}ms
-              </Text>
-            </View>
-          ))}
-          {!isLoggedIn && (
-            <Text style={styles.rankLoginNote}>🔒 로그인하면 랭킹에 등록돼요</Text>
-          )}
-        </>
-      )}
-
-      <TouchableOpacity style={styles.refreshBtn} onPress={loadLeaderboard}>
-        <Text style={styles.refreshBtnText}>↻ 새로고침</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
 
   return (
     <>
@@ -238,7 +179,14 @@ export default function ReactionTestScreen() {
 
       {tab === 'ranking' ? (
         <View style={styles.rankingContainer}>
-          <RankingView />
+          <LeaderboardView
+            gameType="reaction-test"
+            ascending={true}
+            valueFormatter={v => `${v}ms`}
+            subtitle="낮을수록 빨라요"
+            accentColor="#A5D6A7"
+            isLoggedIn={isLoggedIn}
+          />
         </View>
       ) : (
         <Animated.View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -462,76 +410,5 @@ const styles = StyleSheet.create({
   rankingContainer: {
     flex: 1,
     backgroundColor: '#121213',
-  },
-  rankingScroll: { flex: 1 },
-  rankingContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-  rankingTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  rankingSubtitle: {
-    color: '#818384',
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  rankRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A1A1B',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-  },
-  rankRowMe: {
-    borderColor: '#A5D6A7',
-    backgroundColor: '#1A2E1A',
-  },
-  rankMedal: {
-    fontSize: 20,
-    width: 36,
-    textAlign: 'center',
-  },
-  rankInfo: { flex: 1, marginLeft: 8 },
-  rankName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  rankNameMe: { color: '#A5D6A7' },
-  rankGames: { color: '#818384', fontSize: 12, marginTop: 2 },
-  rankMs: {
-    color: '#FDD835',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  rankMsMe: { color: '#A5D6A7' },
-  emptyRank: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    gap: 8,
-  },
-  emptyRankEmoji: { fontSize: 48 },
-  emptyRankText: { color: '#fff', fontSize: 18, fontWeight: '600' },
-  emptyRankSub: { color: '#818384', fontSize: 13 },
-  rankLoginNote: {
-    color: '#818384',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 16,
-  },
-  refreshBtn: {
-    marginTop: 20,
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  refreshBtnText: {
-    color: '#818384',
-    fontSize: 14,
   },
 });

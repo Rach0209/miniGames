@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
 import { loadPatternMemoryStats, updatePatternMemoryStats, PatternMemoryStats } from '../../utils/patternMemoryStorage';
 import InfoModal from '../../components/InfoModal';
+import LeaderboardView from '../../components/LeaderboardView';
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
 const GRID_OPTIONS = [4, 5, 6, 7, 8, 9, 10];
@@ -19,6 +20,9 @@ const COLOR_ON  = '#FFD700';
 const COLOR_ERR = '#FF3B30';
 
 type Phase = 'idle' | 'showing' | 'input' | 'correct' | 'gameover';
+type Tab = 'game' | 'ranking';
+
+const ACCENT = '#FFD700';
 
 const RULES_PATTERN = [
   { emoji: '👁', text: '셀이 깜박이는 순서를 기억하세요.' },
@@ -42,6 +46,7 @@ export default function PatternMemoryScreen() {
   const [stats, setStats] = useState<PatternMemoryStats>({ totalGames: 0, highScore: 0, distribution: Array(30).fill(0) });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [tab, setTab] = useState<Tab>('game');
 
   // 애니메이션: 셀별 밝기 (0=꺼짐, 1=켜짐)
   const cellAnims = useRef<Animated.Value[]>([]);
@@ -181,6 +186,34 @@ export default function PatternMemoryScreen() {
         rules={RULES_PATTERN}
       />
 
+      {/* 탭 바 */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'game' && styles.tabBtnActive]}
+          onPress={() => setTab('game')}
+        >
+          <Text style={[styles.tabText, tab === 'game' && styles.tabTextActive]}>게임</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'ranking' && styles.tabBtnActive]}
+          onPress={() => setTab('ranking')}
+        >
+          <Text style={[styles.tabText, tab === 'ranking' && styles.tabTextActive]}>🏆 랭킹</Text>
+        </TouchableOpacity>
+      </View>
+
+      {tab === 'ranking' ? (
+        <View style={styles.rankingContainer}>
+          <LeaderboardView
+            gameType="pattern-memory"
+            ascending={false}
+            valueFormatter={v => `${v}라운드`}
+            subtitle="높을수록 좋아요"
+            accentColor={ACCENT}
+            isLoggedIn={isLoggedIn}
+          />
+        </View>
+      ) : (
       <View style={styles.container}>
         {/* 상단 정보 */}
         {phase !== 'idle' && (
@@ -299,11 +332,39 @@ export default function PatternMemoryScreen() {
           </View>
         )}
       </View>
+      )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#1A1A1B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: ACCENT,
+  },
+  tabText: {
+    color: '#818384',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: ACCENT,
+  },
+  rankingContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+  },
   container: {
     flex: 1,
     backgroundColor: '#121213',

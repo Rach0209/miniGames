@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
 import { loadColorMemoryStats, updateColorMemoryStats, ColorMemoryStats } from '../../utils/colorMemoryStorage';
 import InfoModal from '../../components/InfoModal';
+import LeaderboardView from '../../components/LeaderboardView';
 
 const COLOR_MEMORY_RULES = [
   { emoji: '👀', text: '색상 타일이 순서대로 점등됩니다. 순서를 잘 기억하세요.' },
@@ -27,9 +28,13 @@ const COLORS = [
 ];
 
 type Phase = 'idle' | 'showing' | 'input' | 'correct' | 'gameover';
+type Tab = 'game' | 'ranking';
+
+const ACCENT = '#FB8C00';
 
 export default function ColorMemoryScreen() {
   const router = useRouter();
+  const [tab, setTab] = useState<Tab>('game');
   const [sequence, setSequence] = useState<number[]>([]);
   const [playerInput, setPlayerInput] = useState<number[]>([]);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -152,72 +157,129 @@ export default function ColorMemoryScreen() {
         description="점등되는 색상 순서를 기억하고 똑같이 탭하세요!"
         rules={COLOR_MEMORY_RULES}
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.scoreRow}>
-          <View style={styles.scoreBox}>
-            <Text style={styles.scoreValue}>{score}</Text>
-            <Text style={styles.scoreLabel}>현재</Text>
-          </View>
-          <View style={styles.scoreBox}>
-            <Text style={styles.scoreValue}>{stats.highScore}</Text>
-            <Text style={styles.scoreLabel}>최고</Text>
-          </View>
-          <View style={styles.scoreBox}>
-            <Text style={styles.scoreValue}>{stats.totalGames}</Text>
-            <Text style={styles.scoreLabel}>총 게임</Text>
-          </View>
-        </View>
 
-        <View style={styles.phaseBox}>
-          <Text style={styles.phaseText}>{phaseLabel}</Text>
-          {phase === 'input' && (
-            <Text style={styles.progressText}>{playerInput.length} / {sequence.length}</Text>
-          )}
-        </View>
+      {/* 탭 바 */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'game' && styles.tabBtnActive]}
+          onPress={() => setTab('game')}
+        >
+          <Text style={[styles.tabText, tab === 'game' && styles.tabTextActive]}>게임</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'ranking' && styles.tabBtnActive]}
+          onPress={() => setTab('ranking')}
+        >
+          <Text style={[styles.tabText, tab === 'ranking' && styles.tabTextActive]}>🏆 랭킹</Text>
+        </TouchableOpacity>
+      </View>
 
-        <View style={styles.grid}>
-          {COLORS.map((color) => (
-            <Animated.View
-              key={color.id}
-              style={[
-                styles.colorTileWrapper,
-                { transform: [{ scale: scaleAnims.current[color.id] }] },
-              ]}
-            >
-              <TouchableOpacity
+      {tab === 'ranking' ? (
+        <View style={styles.rankingContainer}>
+          <LeaderboardView
+            gameType="color-memory"
+            ascending={false}
+            valueFormatter={v => `${v}라운드`}
+            subtitle="높을수록 좋아요"
+            accentColor={ACCENT}
+            isLoggedIn={isLoggedIn}
+          />
+        </View>
+      ) : (
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <View style={styles.scoreRow}>
+            <View style={styles.scoreBox}>
+              <Text style={styles.scoreValue}>{score}</Text>
+              <Text style={styles.scoreLabel}>현재</Text>
+            </View>
+            <View style={styles.scoreBox}>
+              <Text style={styles.scoreValue}>{stats.highScore}</Text>
+              <Text style={styles.scoreLabel}>최고</Text>
+            </View>
+            <View style={styles.scoreBox}>
+              <Text style={styles.scoreValue}>{stats.totalGames}</Text>
+              <Text style={styles.scoreLabel}>총 게임</Text>
+            </View>
+          </View>
+
+          <View style={styles.phaseBox}>
+            <Text style={styles.phaseText}>{phaseLabel}</Text>
+            {phase === 'input' && (
+              <Text style={styles.progressText}>{playerInput.length} / {sequence.length}</Text>
+            )}
+          </View>
+
+          <View style={styles.grid}>
+            {COLORS.map((color) => (
+              <Animated.View
+                key={color.id}
                 style={[
-                  styles.colorTile,
-                  { backgroundColor: color.bg },
-                  activeColor === color.id && styles.colorTileActive,
-                  phase !== 'input' && styles.colorTileDisabled,
+                  styles.colorTileWrapper,
+                  { transform: [{ scale: scaleAnims.current[color.id] }] },
                 ]}
-                onPress={() => handleColorPress(color.id)}
-                activeOpacity={0.75}
-                disabled={phase !== 'input'}
               >
-                <Text style={styles.colorLabel}>{color.label}</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          ))}
-        </View>
+                <TouchableOpacity
+                  style={[
+                    styles.colorTile,
+                    { backgroundColor: color.bg },
+                    activeColor === color.id && styles.colorTileActive,
+                    phase !== 'input' && styles.colorTileDisabled,
+                  ]}
+                  onPress={() => handleColorPress(color.id)}
+                  activeOpacity={0.75}
+                  disabled={phase !== 'input'}
+                >
+                  <Text style={styles.colorLabel}>{color.label}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+          </View>
 
-        {(phase === 'idle' || phase === 'gameover') && (
-          <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.8}>
-            <Text style={styles.startButtonText}>
-              {phase === 'idle' ? '▶ 시작' : '🔄 다시 하기'}
-            </Text>
-          </TouchableOpacity>
-        )}
+          {(phase === 'idle' || phase === 'gameover') && (
+            <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.8}>
+              <Text style={styles.startButtonText}>
+                {phase === 'idle' ? '▶ 시작' : '🔄 다시 하기'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
-        {!isLoggedIn && (
-          <Text style={styles.guestNote}>🔒 로그인하면 기록이 저장돼요</Text>
-        )}
-      </ScrollView>
+          {!isLoggedIn && (
+            <Text style={styles.guestNote}>🔒 로그인하면 기록이 저장돼요</Text>
+          )}
+        </ScrollView>
+      )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#1A1A1B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: ACCENT,
+  },
+  tabText: {
+    color: '#818384',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: ACCENT,
+  },
+  rankingContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+  },
   container: {
     flex: 1,
     backgroundColor: '#121213',

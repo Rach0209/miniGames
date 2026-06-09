@@ -7,10 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../utils/supabase';
 import { load2048Stats, update2048Stats, Game2048Stats } from '../../utils/2048Storage';
 import InfoModal from '../../components/InfoModal';
+import LeaderboardView from '../../components/LeaderboardView';
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 type Direction = 'up' | 'down' | 'left' | 'right';
 type GameStatus = 'playing' | 'won' | 'over';
+type Tab = 'game' | 'ranking';
+
+const ACCENT_2048 = '#f59563';
 
 interface TileData {
   id: number;
@@ -178,6 +182,7 @@ export default function Game2048Screen() {
   const [stats, setStats] = useState<Game2048Stats>({ totalGames: 0, bestScore: 0, bestTile: 0, distribution: Array(6).fill(0) });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [tab, setTab] = useState<Tab>('game');
 
   // 애니메이션 맵: id → { pos, scale }
   const animMap = useRef<Map<number, { pos: Animated.ValueXY; scale: Animated.Value }>>(new Map());
@@ -357,6 +362,34 @@ export default function Game2048Screen() {
         rules={RULES_2048}
       />
 
+      {/* 탭 바 */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'game' && styles.tabBtnActive]}
+          onPress={() => setTab('game')}
+        >
+          <Text style={[styles.tabText, tab === 'game' && styles.tabTextActive]}>게임</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === 'ranking' && styles.tabBtnActive]}
+          onPress={() => setTab('ranking')}
+        >
+          <Text style={[styles.tabText, tab === 'ranking' && styles.tabTextActive]}>🏆 랭킹</Text>
+        </TouchableOpacity>
+      </View>
+
+      {tab === 'ranking' ? (
+        <View style={styles.rankingContainer}>
+          <LeaderboardView
+            gameType="2048"
+            ascending={false}
+            valueFormatter={v => `${v.toLocaleString()}점`}
+            subtitle="높을수록 좋아요"
+            accentColor={ACCENT_2048}
+            isLoggedIn={isLoggedIn}
+          />
+        </View>
+      ) : (
       <View style={styles.container}>
         {/* 점수 */}
         <View style={styles.scoreRow}>
@@ -454,6 +487,7 @@ export default function Game2048Screen() {
           <Text style={styles.guestNote}>🔒 로그인하면 최고 점수가 저장돼요</Text>
         )}
       </View>
+      )}
     </>
   );
 }
@@ -468,6 +502,33 @@ function ScoreBox({ label, value }: { label: string; value: number }) {
 }
 
 const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#1A1A1B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: ACCENT_2048,
+  },
+  tabText: {
+    color: '#818384',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: ACCENT_2048,
+  },
+  rankingContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+  },
   container: {
     flex: 1,
     backgroundColor: '#faf8ef',
