@@ -92,6 +92,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/2048')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🔢</Text>
+          <View>
+            <Text style={styles.gameName}>2048</Text>
+            <Text style={styles.gameDesc}>타일을 합쳐 2048을 만드세요!</Text>
+          </View>
+        </TouchableOpacity>
+
       </View>
     </>
   );
