@@ -67,7 +67,7 @@ export default function ReactionTestScreen() {
       setRound(0);
       Animated.timing(bgAnim, { toValue: 0, duration: 80, useNativeDriver: false }).start();
     }
-  }, [phase, bgAnim, loadLeaderboard]);
+  }, [phase, bgAnim]);
 
   const goToGreen = useCallback(() => {
     setPhase('go');
