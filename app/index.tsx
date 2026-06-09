@@ -80,6 +80,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/reaction-test')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>⚡</Text>
+          <View>
+            <Text style={styles.gameName}>반응속도 테스트</Text>
+            <Text style={styles.gameDesc}>초록색으로 바뀌는 순간 탭하세요!</Text>
+          </View>
+        </TouchableOpacity>
+
       </View>
     </>
   );
