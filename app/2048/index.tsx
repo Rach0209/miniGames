@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, PanResponder, Dimensions,
+  View, Text, StyleSheet, TouchableOpacity, PanResponder, Dimensions, Animated,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,13 +9,27 @@ import { load2048Stats, update2048Stats, Game2048Stats } from '../../utils/2048S
 import InfoModal from '../../components/InfoModal';
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
-type Board = number[][];
 type Direction = 'up' | 'down' | 'left' | 'right';
 type GameStatus = 'playing' | 'won' | 'over';
+
+interface TileData {
+  id: number;
+  value: number;
+  row: number;
+  col: number;
+  merging?: boolean; // 합쳐져서 사라질 타일
+}
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
 const SIZE = 4;
 const SWIPE_THRESHOLD = 30;
+const SLIDE_DURATION = 110;
+const POP_DURATION = 80;
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const BOARD_SIZE = Math.min(SCREEN_W - 32, 360);
+const GAP = 8;
+const TILE_SIZE = (BOARD_SIZE - GAP * (SIZE + 1)) / SIZE;
 
 const TILE_COLORS: Record<number, { bg: string; text: string }> = {
   0:    { bg: '#cdc1b4', text: 'transparent' },
@@ -41,174 +55,272 @@ const RULES_2048 = [
   { emoji: '💾', text: '최고 점수는 Google 로그인 시 자동 저장돼요.' },
 ];
 
-// ── 게임 로직 ─────────────────────────────────────────────────────────────────
-function emptyBoard(): Board {
-  return Array(SIZE).fill(null).map(() => Array(SIZE).fill(0));
+// ── 헬퍼 ──────────────────────────────────────────────────────────────────────
+function tileX(col: number) { return GAP + col * (TILE_SIZE + GAP); }
+function tileY(row: number) { return GAP + row * (TILE_SIZE + GAP); }
+function getTileFontSize(val: number) { return val >= 1024 ? 20 : val >= 128 ? 24 : 28; }
+function getTileStyle(val: number) { return TILE_COLORS[val] ?? { bg: '#3c3a32', text: '#f9f6f2' }; }
+
+function tilesToGrid(tiles: TileData[]): number[][] {
+  const g = Array(SIZE).fill(null).map(() => Array(SIZE).fill(0));
+  tiles.filter(t => !t.merging).forEach(t => { g[t.row][t.col] = t.value; });
+  return g;
 }
 
-function addRandomTile(board: Board): Board {
-  const empties: [number, number][] = [];
-  board.forEach((row, r) => row.forEach((v, c) => { if (v === 0) empties.push([r, c]); }));
-  if (empties.length === 0) return board;
-  const [r, c] = empties[Math.floor(Math.random() * empties.length)];
-  const next = board.map(row => [...row]);
-  next[r][c] = Math.random() < 0.9 ? 2 : 4;
-  return next;
-}
-
-function slideRow(row: number[]): { row: number[]; score: number } {
-  const nums = row.filter(v => v !== 0);
-  let score = 0;
-  const merged: number[] = [];
-  let i = 0;
-  while (i < nums.length) {
-    if (i + 1 < nums.length && nums[i] === nums[i + 1]) {
-      const val = nums[i] * 2;
-      merged.push(val);
-      score += val;
-      i += 2;
-    } else {
-      merged.push(nums[i]);
-      i++;
-    }
-  }
-  while (merged.length < SIZE) merged.push(0);
-  return { row: merged, score };
-}
-
-function moveBoard(board: Board, dir: Direction): { board: Board; score: number; moved: boolean } {
-  let totalScore = 0;
-  let moved = false;
-  const next = emptyBoard();
-
-  const getRow = (b: Board, r: number) => b[r];
-  const getCol = (b: Board, c: number) => b.map(row => row[c]);
-
-  if (dir === 'left') {
-    for (let r = 0; r < SIZE; r++) {
-      const { row, score } = slideRow(getRow(board, r));
-      next[r] = row;
-      totalScore += score;
-      if (row.join() !== getRow(board, r).join()) moved = true;
-    }
-  } else if (dir === 'right') {
-    for (let r = 0; r < SIZE; r++) {
-      const { row, score } = slideRow([...getRow(board, r)].reverse());
-      next[r] = row.reverse();
-      totalScore += score;
-      if (next[r].join() !== getRow(board, r).join()) moved = true;
-    }
-  } else if (dir === 'up') {
+function canMove(tiles: TileData[]): boolean {
+  const g = tilesToGrid(tiles);
+  for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++) {
-      const { row, score } = slideRow(getCol(board, c));
-      row.forEach((v, r) => { next[r][c] = v; });
-      totalScore += score;
-      if (row.join() !== getCol(board, c).join()) moved = true;
+      if (g[r][c] === 0) return true;
+      if (c + 1 < SIZE && g[r][c] === g[r][c + 1]) return true;
+      if (r + 1 < SIZE && g[r][c] === g[r + 1][c]) return true;
     }
-  } else {
-    for (let c = 0; c < SIZE; c++) {
-      const { row, score } = slideRow([...getCol(board, c)].reverse());
-      row.reverse().forEach((v, r) => { next[r][c] = v; });
-      totalScore += score;
-      if (next.map(row => row[c]).join() !== getCol(board, c).join()) moved = true;
-    }
-  }
-
-  return { board: next, score: totalScore, moved };
-}
-
-function maxTile(board: Board): number {
-  return Math.max(...board.flat());
-}
-
-function canMove(board: Board): boolean {
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (board[r][c] === 0) return true;
-      if (c + 1 < SIZE && board[r][c] === board[r][c + 1]) return true;
-      if (r + 1 < SIZE && board[r][c] === board[r + 1][c]) return true;
-    }
-  }
   return false;
 }
 
-function initBoard(): Board {
-  return addRandomTile(addRandomTile(emptyBoard()));
+function findEmptyPos(tiles: TileData[]): [number, number][] {
+  const g = tilesToGrid(tiles);
+  const empties: [number, number][] = [];
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (g[r][c] === 0) empties.push([r, c]);
+  return empties;
+}
+
+// ── 이동 로직 (타일 ID 추적) ───────────────────────────────────────────────────
+interface MoveResult {
+  newTiles: TileData[];       // 이동 후 모든 타일 (merging 포함)
+  toRemove: Set<number>;      // 애니메이션 후 제거할 ID
+  mergedIds: Set<number>;     // pop 애니메이션 재생할 ID
+  score: number;
+  moved: boolean;
+}
+
+function moveTiles(tiles: TileData[], dir: Direction): MoveResult {
+  const nonMerging = tiles.filter(t => !t.merging);
+  const result: TileData[] = [];
+  const toRemove = new Set<number>();
+  const mergedIds = new Set<number>();
+  let score = 0;
+  let moved = false;
+
+  if (dir === 'left' || dir === 'right') {
+    for (let r = 0; r < SIZE; r++) {
+      const rowTiles = nonMerging
+        .filter(t => t.row === r)
+        .sort((a, b) => a.col - b.col);
+      const reversed = dir === 'right' ? [...rowTiles].reverse() : rowTiles;
+
+      let pos = 0;
+      let i = 0;
+      while (i < reversed.length) {
+        const targetCol = dir === 'right' ? SIZE - 1 - pos : pos;
+        if (i + 1 < reversed.length && reversed[i].value === reversed[i + 1].value) {
+          const survivor = { ...reversed[i], value: reversed[i].value * 2, row: r, col: targetCol };
+          const consumed = { ...reversed[i + 1], row: r, col: targetCol, merging: true };
+          result.push(survivor, consumed);
+          toRemove.add(consumed.id);
+          mergedIds.add(survivor.id);
+          score += survivor.value;
+          if (reversed[i].col !== targetCol || reversed[i + 1].col !== targetCol) moved = true;
+          i += 2;
+        } else {
+          const t = { ...reversed[i], row: r, col: targetCol };
+          result.push(t);
+          if (reversed[i].col !== targetCol) moved = true;
+          i++;
+        }
+        pos++;
+      }
+    }
+  } else {
+    for (let c = 0; c < SIZE; c++) {
+      const colTiles = nonMerging
+        .filter(t => t.col === c)
+        .sort((a, b) => a.row - b.row);
+      const reversed = dir === 'down' ? [...colTiles].reverse() : colTiles;
+
+      let pos = 0;
+      let i = 0;
+      while (i < reversed.length) {
+        const targetRow = dir === 'down' ? SIZE - 1 - pos : pos;
+        if (i + 1 < reversed.length && reversed[i].value === reversed[i + 1].value) {
+          const survivor = { ...reversed[i], value: reversed[i].value * 2, row: targetRow, col: c };
+          const consumed = { ...reversed[i + 1], row: targetRow, col: c, merging: true };
+          result.push(survivor, consumed);
+          toRemove.add(consumed.id);
+          mergedIds.add(survivor.id);
+          score += survivor.value;
+          if (reversed[i].row !== targetRow || reversed[i + 1].row !== targetRow) moved = true;
+          i += 2;
+        } else {
+          const t = { ...reversed[i], row: targetRow, col: c };
+          result.push(t);
+          if (reversed[i].row !== targetRow) moved = true;
+          i++;
+        }
+        pos++;
+      }
+    }
+  }
+
+  return { newTiles: result, toRemove, mergedIds, score, moved };
 }
 
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────────
-const { width: SCREEN_W } = Dimensions.get('window');
-const BOARD_SIZE = Math.min(SCREEN_W - 32, 360);
-const GAP = 8;
-const TILE_SIZE = (BOARD_SIZE - GAP * (SIZE + 1)) / SIZE;
-
 export default function Game2048Screen() {
   const router = useRouter();
-  const [board, setBoard] = useState<Board>(initBoard);
+  const [tiles, setTiles] = useState<TileData[]>([]);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [status, setStatus] = useState<GameStatus>('playing');
+  const [wonAcknowledged, setWonAcknowledged] = useState(false);
   const [stats, setStats] = useState<Game2048Stats>({ totalGames: 0, bestScore: 0, bestTile: 0, distribution: Array(6).fill(0) });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  const [wonAcknowledged, setWonAcknowledged] = useState(false);
+
+  // 애니메이션 맵: id → { pos, scale }
+  const animMap = useRef<Map<number, { pos: Animated.ValueXY; scale: Animated.Value }>>(new Map());
+  const isAnimating = useRef(false);
+  const idCounter = useRef(0);
+  const scoreRef = useRef(0);
+  const statusRef = useRef<GameStatus>('playing');
+
+  useEffect(() => { scoreRef.current = score; }, [score]);
+  useEffect(() => { statusRef.current = status; }, [status]);
 
   useEffect(() => {
     load2048Stats().then(s => { setStats(s); setBest(s.bestScore); });
     supabase.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
   }, []);
 
-  const handleMove = useCallback((dir: Direction) => {
-    if (status === 'over') return;
-    if (status === 'won' && !wonAcknowledged) return;
+  // ── 타일 생성 헬퍼 ────────────────────────────────────────────────────────
+  const createTile = useCallback((value: number, row: number, col: number, appear = false): TileData => {
+    const id = idCounter.current++;
+    const pos = new Animated.ValueXY({ x: tileX(col), y: tileY(row) });
+    const scale = new Animated.Value(appear ? 0 : 1);
+    animMap.current.set(id, { pos, scale });
+    return { id, value, row, col };
+  }, []);
 
-    setBoard(prev => {
-      const { board: next, score: gained, moved } = moveBoard(prev, dir);
-      if (!moved) return prev;
-
-      const withTile = addRandomTile(next);
-      const top = maxTile(withTile);
-
-      setScore(s => {
-        const newScore = s + gained;
-        setBest(b => Math.max(b, newScore));
-        return newScore;
-      });
-
-      if (top >= 2048 && status === 'playing') {
-        setStatus('won');
-        setScore(s => {
-          update2048Stats(s + gained, top).then(setStats);
-          return s + gained;
-        });
-      } else if (!canMove(withTile)) {
-        setStatus('over');
-        setScore(s => {
-          update2048Stats(s + gained, top).then(setStats);
-          return s + gained;
-        });
-      }
-
-      return withTile;
-    });
-  }, [status, wonAcknowledged]);
-
+  // ── 초기 보드 ─────────────────────────────────────────────────────────────
   const newGame = useCallback(() => {
-    setBoard(initBoard());
+    animMap.current.clear();
+    idCounter.current = 0;
+    const empties: [number, number][] = [];
+    for (let r = 0; r < SIZE; r++)
+      for (let c = 0; c < SIZE; c++)
+        empties.push([r, c]);
+
+    const shuffle = [...empties].sort(() => Math.random() - 0.5);
+    const t1 = createTile(Math.random() < 0.9 ? 2 : 4, shuffle[0][0], shuffle[0][1]);
+    const t2 = createTile(Math.random() < 0.9 ? 2 : 4, shuffle[1][0], shuffle[1][1]);
+    setTiles([t1, t2]);
     setScore(0);
     setStatus('playing');
     setWonAcknowledged(false);
-  }, []);
+  }, [createTile]);
 
-  // 스와이프 처리
+  useEffect(() => { newGame(); }, []);
+
+  // ── 이동 처리 ─────────────────────────────────────────────────────────────
+  const handleMove = useCallback((dir: Direction) => {
+    if (isAnimating.current) return;
+    if (statusRef.current === 'over') return;
+    if (statusRef.current === 'won' && !wonAcknowledged) return;
+
+    setTiles(prev => {
+      const { newTiles, toRemove, mergedIds, score: gained, moved } = moveTiles(prev, dir);
+      if (!moved) return prev;
+
+      isAnimating.current = true;
+
+      // 슬라이드 애니메이션
+      const slideAnims = newTiles.map(tile => {
+        const anim = animMap.current.get(tile.id);
+        if (!anim) return null;
+        return Animated.timing(anim.pos, {
+          toValue: { x: tileX(tile.col), y: tileY(tile.row) },
+          duration: SLIDE_DURATION,
+          useNativeDriver: true,
+        });
+      }).filter(Boolean) as Animated.CompositeAnimation[];
+
+      Animated.parallel(slideAnims).start(() => {
+        // 슬라이드 완료 → 소비 타일 제거 + pop + 새 타일
+        toRemove.forEach(id => animMap.current.delete(id));
+
+        // 합쳐진 타일 pop
+        const popAnims = Array.from(mergedIds).map(id => {
+          const anim = animMap.current.get(id);
+          if (!anim) return null;
+          return Animated.sequence([
+            Animated.timing(anim.scale, { toValue: 1.2, duration: POP_DURATION, useNativeDriver: true }),
+            Animated.timing(anim.scale, { toValue: 1.0, duration: POP_DURATION, useNativeDriver: true }),
+          ]);
+        }).filter(Boolean) as Animated.CompositeAnimation[];
+
+        Animated.parallel(popAnims).start();
+
+        // 새 타일 추가
+        const surviving = newTiles.filter(t => !toRemove.has(t.id));
+        const empties = findEmptyPos(surviving);
+        let finalTiles = surviving;
+
+        if (empties.length > 0) {
+          const [nr, nc] = empties[Math.floor(Math.random() * empties.length)];
+          const newTile = createTile(Math.random() < 0.9 ? 2 : 4, nr, nc, true);
+
+          // 새 타일 등장 애니메이션
+          const newAnim = animMap.current.get(newTile.id);
+          if (newAnim) {
+            Animated.spring(newAnim.scale, {
+              toValue: 1,
+              useNativeDriver: true,
+              speed: 20,
+              bounciness: 6,
+            }).start();
+          }
+
+          finalTiles = [...surviving, newTile];
+        }
+
+        // 점수 업데이트
+        const newScore = scoreRef.current + gained;
+        setScore(newScore);
+        setBest(b => Math.max(b, newScore));
+        scoreRef.current = newScore;
+
+        // 승리/게임오버 체크
+        const topVal = Math.max(...finalTiles.map(t => t.value));
+        if (topVal >= 2048 && statusRef.current === 'playing') {
+          setStatus('won');
+          statusRef.current = 'won';
+          update2048Stats(newScore, topVal).then(setStats);
+        } else if (!canMove(finalTiles)) {
+          setStatus('over');
+          statusRef.current = 'over';
+          update2048Stats(newScore, topVal).then(setStats);
+        }
+
+        setTiles(finalTiles);
+        isAnimating.current = false;
+      });
+
+      // 즉시 newTiles로 바꿔서 렌더링 (위치는 anim이 처리)
+      return newTiles;
+    });
+  }, [wonAcknowledged, createTile]);
+
+  // ── 스와이프 ──────────────────────────────────────────────────────────────
   const touchStart = useRef({ x: 0, y: 0 });
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => {
+    onPanResponderGrant: e => {
       touchStart.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
     },
-    onPanResponderRelease: (e) => {
+    onPanResponderRelease: e => {
       const dx = e.nativeEvent.pageX - touchStart.current.x;
       const dy = e.nativeEvent.pageY - touchStart.current.y;
       if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
@@ -219,10 +331,6 @@ export default function Game2048Screen() {
       }
     },
   })).current;
-
-  // 타일 색상 (정의된 범위 밖은 가장 짙은 색으로)
-  const getTileStyle = (val: number) => TILE_COLORS[val] ?? { bg: '#3c3a32', text: '#f9f6f2' };
-  const getTileFontSize = (val: number) => val >= 1024 ? 20 : val >= 128 ? 24 : 28;
 
   return (
     <>
@@ -260,7 +368,8 @@ export default function Game2048Screen() {
         </View>
 
         {/* 보드 */}
-        <View style={[styles.boardWrapper, { width: BOARD_SIZE, height: BOARD_SIZE }]}
+        <View
+          style={[styles.boardWrapper, { width: BOARD_SIZE, height: BOARD_SIZE }]}
           {...panResponder.panHandlers}
         >
           {/* 빈 셀 배경 */}
@@ -270,38 +379,42 @@ export default function Game2048Screen() {
                 key={`bg-${r}-${c}`}
                 style={[styles.cellBg, {
                   width: TILE_SIZE, height: TILE_SIZE,
-                  left: GAP + c * (TILE_SIZE + GAP),
-                  top: GAP + r * (TILE_SIZE + GAP),
+                  left: tileX(c), top: tileY(r),
                 }]}
               />
             ))
           )}
 
-          {/* 타일 */}
-          {board.map((row, r) =>
-            row.map((val, c) => {
-              const { bg, text } = getTileStyle(val);
-              return (
-                <View
-                  key={`tile-${r}-${c}`}
-                  style={[styles.tile, {
-                    width: TILE_SIZE, height: TILE_SIZE,
-                    left: GAP + c * (TILE_SIZE + GAP),
-                    top: GAP + r * (TILE_SIZE + GAP),
+          {/* 타일 (Animated) */}
+          {tiles.map(tile => {
+            const anim = animMap.current.get(tile.id);
+            const { bg, text } = getTileStyle(tile.value);
+            if (!anim) return null;
+            return (
+              <Animated.View
+                key={tile.id}
+                style={[
+                  styles.tile,
+                  {
+                    width: TILE_SIZE,
+                    height: TILE_SIZE,
                     backgroundColor: bg,
-                  }]}
-                >
-                  {val > 0 && (
-                    <Text style={[styles.tileText, { color: text, fontSize: getTileFontSize(val) }]}>
-                      {val}
-                    </Text>
-                  )}
-                </View>
-              );
-            })
-          )}
+                    transform: [
+                      { translateX: anim.pos.x },
+                      { translateY: anim.pos.y },
+                      { scale: anim.scale },
+                    ],
+                  },
+                ]}
+              >
+                <Text style={[styles.tileText, { color: text, fontSize: getTileFontSize(tile.value) }]}>
+                  {tile.value}
+                </Text>
+              </Animated.View>
+            );
+          })}
 
-          {/* 게임오버 / 승리 오버레이 */}
+          {/* 오버레이 */}
           {(status === 'over' || (status === 'won' && !wonAcknowledged)) && (
             <View style={styles.overlay}>
               <Text style={styles.overlayEmoji}>{status === 'won' ? '🎉' : '😢'}</Text>
@@ -319,7 +432,7 @@ export default function Game2048Screen() {
           )}
         </View>
 
-        {/* 방향 버튼 (웹/접근성용) */}
+        {/* 방향 버튼 */}
         <View style={styles.dpadWrapper}>
           <TouchableOpacity style={styles.dpadBtn} onPress={() => handleMove('up')}>
             <Text style={styles.dpadText}>▲</Text>
@@ -410,6 +523,8 @@ const styles = StyleSheet.create({
   },
   tile: {
     position: 'absolute',
+    top: 0,
+    left: 0,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -425,55 +540,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  overlayEmoji: {
-    fontSize: 48,
-  },
-  overlayTitle: {
-    color: '#776e65',
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  overlayScore: {
-    color: '#776e65',
-    fontSize: 16,
-    marginBottom: 8,
-  },
+  overlayEmoji: { fontSize: 48 },
+  overlayTitle: { color: '#776e65', fontSize: 28, fontWeight: 'bold' },
+  overlayScore: { color: '#776e65', fontSize: 16, marginBottom: 8 },
   overlayBtn: {
     backgroundColor: '#8f7a66',
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 28,
   },
-  overlayBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
+  overlayBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   dpadWrapper: {
     marginTop: 24,
     alignItems: 'center',
     gap: 4,
   },
-  dpadRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
+  dpadRow: { flexDirection: 'row', gap: 4 },
   dpadBtn: {
     backgroundColor: '#bbada0',
-    width: 52,
-    height: 52,
+    width: 52, height: 52,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dpadText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  guestNote: {
-    color: '#bbada0',
-    fontSize: 12,
-    marginTop: 16,
-  },
+  dpadText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  guestNote: { color: '#bbada0', fontSize: 12, marginTop: 16 },
 });
