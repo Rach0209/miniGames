@@ -507,23 +507,23 @@ function MyDrawingsMode({ onBack }: { onBack: () => void }) {
 
   useEffect(() => { load(); }, []);
 
-  const handleDelete = (id: string, answer: string) => {
-    Alert.alert('삭제 확인', `"${answer}" 그림을 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDrawing(id);
-            setDrawings((prev) => prev.filter((d) => d.id !== id));
-            setStats((prev) => prev ? { ...prev, drawingCount: prev.drawingCount - 1 } : prev);
-          } catch (e: any) {
-            Alert.alert('오류', e.message);
-          }
-        },
-      },
-    ]);
+  const handleDelete = async (id: string, answer: string) => {
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm(`"${answer}" 그림을 삭제할까요?`)
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert('삭제 확인', `"${answer}" 그림을 삭제할까요?`, [
+            { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+            { text: '삭제', style: 'destructive', onPress: () => resolve(true) },
+          ]);
+        });
+    if (!confirmed) return;
+    try {
+      await deleteDrawing(id);
+      setDrawings((prev) => prev.filter((d) => d.id !== id));
+      setStats((prev) => prev ? { ...prev, drawingCount: prev.drawingCount - 1 } : prev);
+    } catch (e: any) {
+      Alert.alert('오류', e.message);
+    }
   };
 
   if (loading) {
