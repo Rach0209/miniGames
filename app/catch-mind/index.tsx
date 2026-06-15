@@ -66,6 +66,11 @@ function DrawingCanvas({
   const [selectedTool, setSelectedTool] = useState<DrawTool>('pen');
   const canvasRef = useRef<View>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
+  const pathsRef = useRef<StrokePath[]>(paths);
+  const onPathsChangeRef = useRef(onPathsChange);
+
+  useEffect(() => { pathsRef.current = paths; }, [paths]);
+  useEffect(() => { onPathsChangeRef.current = onPathsChange; }, [onPathsChange]);
 
   const measureCanvas = useCallback(() => {
     canvasRef.current?.measure((_x, _y, _w, _h, px, py) => {
@@ -115,7 +120,7 @@ function DrawingCanvas({
           width: toolRef.current === 'eraser' ? 24 : widthRef.current,
           points: [...currentStroke.current],
         };
-        onPathsChange?.([...paths, newPath]);
+        onPathsChangeRef.current?.([...pathsRef.current, newPath]);
         currentStroke.current = [];
         setActivePath(null);
       },
@@ -181,7 +186,7 @@ function DrawingCanvas({
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.toolBtn}
-          onPress={() => onPathsChange?.([])}
+          onPress={() => onPathsChangeRef.current?.([])}
         >
           <Text style={[styles.toolBtnText, { color: '#ef4444' }]}>전체 지우기</Text>
         </TouchableOpacity>
