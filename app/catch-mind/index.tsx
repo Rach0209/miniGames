@@ -320,7 +320,7 @@ function DrawMode({ onBack }: { onBack: () => void }) {
 
 type GuessPhase = 'loading' | 'playing' | 'correct' | 'skip' | 'empty';
 
-function GuessMode({ onBack }: { onBack: () => void }) {
+function GuessMode({ onBack, userId }: { onBack: () => void; userId?: string }) {
   const [drawing, setDrawing] = useState<Drawing | null>(null);
   const [phase, setPhase] = useState<GuessPhase>('loading');
   const [guess, setGuess] = useState('');
@@ -336,7 +336,7 @@ function GuessMode({ onBack }: { onBack: () => void }) {
     setShowAnswer(false);
     setWrongCount(0);
     try {
-      const d = await getRandomDrawing();
+      const d = await getRandomDrawing(userId);
       if (!d) {
         setPhase('empty');
         return;
@@ -357,7 +357,7 @@ function GuessMode({ onBack }: { onBack: () => void }) {
     if (!drawing || !guess.trim()) return;
     setSubmitting(true);
     try {
-      const correct = await submitGuess(drawing.id, guess, drawing.answer);
+      const correct = await submitGuess(drawing.id, guess, drawing.answer, userId);
       if (correct) {
         setPhase('correct');
       } else {
@@ -605,22 +605,9 @@ export default function CatchMindScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (!user) {
-    return (
-      <>
-        <Stack.Screen options={{ title: '캐치 마인드', headerLeft: homeHeaderLeft }} />
-        <View style={[styles.centered, { paddingBottom: insets.bottom }]}>
-          <Text style={styles.lockEmoji}>🔒</Text>
-          <Text style={styles.lockTitle}>로그인이 필요해요</Text>
-          <Text style={styles.lockDesc}>홈으로 돌아가 Google 로그인 후{'\n'}이용할 수 있어요</Text>
-        </View>
-      </>
-    );
-  }
-
   return (
     <>
-      <Stack.Screen options={{ title: '캐치 마인드' }} />
+      <Stack.Screen options={{ title: '캐치 마인드', headerLeft: homeHeaderLeft }} />
       {mode === 'select' && (
         <ScrollView
           style={styles.scroll}
@@ -630,14 +617,16 @@ export default function CatchMindScreen() {
           <Text style={styles.pageDesc}>그림으로 소통하는 단어 맞추기 게임</Text>
 
           <TouchableOpacity
-            style={[styles.modeCard, styles.drawCard]}
-            onPress={() => setMode('draw')}
-            activeOpacity={0.85}
+            style={[styles.modeCard, styles.drawCard, !user && styles.modeCardLocked]}
+            onPress={() => user ? setMode('draw') : null}
+            activeOpacity={user ? 0.85 : 1}
           >
-            <Text style={styles.modeCardEmoji}>✏️</Text>
+            <Text style={styles.modeCardEmoji}>{user ? '✏️' : '🔒'}</Text>
             <View style={styles.modeCardInfo}>
               <Text style={styles.modeCardTitle}>그림 출제</Text>
-              <Text style={styles.modeCardDesc}>그림을 그리고 다른 사람들이 맞추게 하세요</Text>
+              <Text style={styles.modeCardDesc}>
+                {user ? '그림을 그리고 다른 사람들이 맞추게 하세요' : '로그인 후 이용할 수 있어요'}
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -654,20 +643,22 @@ export default function CatchMindScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.modeCard, styles.myCard]}
-            onPress={() => setMode('my')}
-            activeOpacity={0.85}
+            style={[styles.modeCard, styles.myCard, !user && styles.modeCardLocked]}
+            onPress={() => user ? setMode('my') : null}
+            activeOpacity={user ? 0.85 : 1}
           >
-            <Text style={styles.modeCardEmoji}>📋</Text>
+            <Text style={styles.modeCardEmoji}>{user ? '📋' : '🔒'}</Text>
             <View style={styles.modeCardInfo}>
               <Text style={styles.modeCardTitle}>내 출제 현황</Text>
-              <Text style={styles.modeCardDesc}>내가 출제한 그림 목록과 통계를 확인하세요</Text>
+              <Text style={styles.modeCardDesc}>
+                {user ? '내가 출제한 그림 목록과 통계를 확인하세요' : '로그인 후 이용할 수 있어요'}
+              </Text>
             </View>
           </TouchableOpacity>
         </ScrollView>
       )}
       {mode === 'draw' && <DrawMode onBack={() => setMode('select')} />}
-      {mode === 'guess' && <GuessMode onBack={() => setMode('select')} />}
+      {mode === 'guess' && <GuessMode onBack={() => setMode('select')} userId={user?.id} />}
       {mode === 'my' && <MyDrawingsMode onBack={() => setMode('select')} />}
     </>
   );
@@ -699,6 +690,7 @@ const styles = StyleSheet.create({
   drawCard: { backgroundColor: '#1a2236', borderColor: '#3b82f6' },
   guessCard: { backgroundColor: '#1e1a2e', borderColor: '#a855f7' },
   myCard: { backgroundColor: '#1a2a1a', borderColor: '#22c55e' },
+  modeCardLocked: { opacity: 0.45 },
   modeCardEmoji: { fontSize: 42 },
   modeCardInfo: { flex: 1 },
   modeCardTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },

@@ -49,28 +49,26 @@ export async function submitDrawing(
   return data as Drawing;
 }
 
-export async function getRandomDrawing(): Promise<Drawing | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) throw new Error('로그인이 필요합니다');
-
-  // 내가 출제한 것 제외, 이미 맞춘 것 제외
-  const { data: solvedIds } = await supabase
-    .from('catch_mind_guesses')
-    .select('drawing_id')
-    .eq('user_id', userData.user.id)
-    .eq('is_correct', true);
-
-  const excludeIds = (solvedIds ?? []).map((g: any) => g.drawing_id);
-
+export async function getRandomDrawing(userId?: string): Promise<Drawing | null> {
   let query = supabase
     .from('catch_mind_drawings')
     .select('*')
     .eq('is_active', true)
-    .neq('user_id', userData.user.id)
     .order('created_at', { ascending: false });
 
-  if (excludeIds.length > 0) {
-    query = query.not('id', 'in', `(${excludeIds.join(',')})`);
+  if (userId) {
+    // 내가 출제한 것 제외, 이미 맞춘 것 제외
+    const { data: solvedIds } = await supabase
+      .from('catch_mind_guesses')
+      .select('drawing_id')
+      .eq('user_id', userId)
+      .eq('is_correct', true);
+
+    const excludeIds = (solvedIds ?? []).map((g: any) => g.drawing_id);
+    query = query.neq('user_id', userId);
+    if (excludeIds.length > 0) {
+      query = query.not('id', 'in', `(${excludeIds.join(',')})`);
+    }
   }
 
   const { data, error } = await query.limit(50);
@@ -84,17 +82,17 @@ export async function getRandomDrawing(): Promise<Drawing | null> {
 export async function submitGuess(
   drawingId: string,
   guess: string,
-  answer: string
+  answer: string,
+  userId?: string
 ): Promise<boolean> {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) throw new Error('로그인이 필요합니다');
+  const isCorrect = guess.trim().toLowerCase() === answer.trim().toLowerCase();
 
-  const isCorrect =
-    guess.trim().toLowerCase() === answer.trim().toLowerCase();
+  // 비로그인이면 로컬 체크만
+  if (!userId) return isCorrect;
 
   const { error } = await supabase.from('catch_mind_guesses').insert({
     drawing_id: drawingId,
-    user_id: userData.user.id,
+    user_id: userId,
     guess: guess.trim(),
     is_correct: isCorrect,
   });
