@@ -135,7 +135,102 @@ export function toFraktur(text: string): string {
   )).join('');
 }
 
-// 변환 목록 (UI용)
+// ── 장식 변환 ──────────────────────────────────────────────────────────────────
+
+// 전각 문자 (넓은 글자)
+const FULLWIDTH_MAP: Record<string, string> = Object.fromEntries(
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 !?.,'.split('').map((c, i, arr) => {
+    const code = c.charCodeAt(0);
+    if (c === ' ') return [c, '　'];
+    if (code >= 33 && code <= 126) return [c, String.fromCodePoint(code + 0xFEE0)];
+    return [c, c];
+  })
+);
+export function toFullWidth(text: string): string {
+  return [...text].map(c => FULLWIDTH_MAP[c] ?? c).join('');
+}
+
+// 위첨자
+const SUPERSCRIPT_MAP: Record<string, string> = {
+  a:'ᵃ',b:'ᵇ',c:'ᶜ',d:'ᵈ',e:'ᵉ',f:'ᶠ',g:'ᵍ',h:'ʰ',i:'ⁱ',j:'ʲ',k:'ᵏ',l:'ˡ',
+  m:'ᵐ',n:'ⁿ',o:'ᵒ',p:'ᵖ',q:'q',r:'ʳ',s:'ˢ',t:'ᵗ',u:'ᵘ',v:'ᵛ',w:'ʷ',x:'ˣ',y:'ʸ',z:'ᶻ',
+  A:'ᴬ',B:'ᴮ',C:'ᶜ',D:'ᴰ',E:'ᴱ',F:'ᶠ',G:'ᴳ',H:'ᴴ',I:'ᴵ',J:'ᴶ',K:'ᴷ',L:'ᴸ',
+  M:'ᴹ',N:'ᴺ',O:'ᴼ',P:'ᴾ',Q:'Q',R:'ᴿ',S:'ˢ',T:'ᵀ',U:'ᵁ',V:'ᵛ',W:'ᵂ',X:'ˣ',Y:'ʸ',Z:'ᶻ',
+  '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+  '+':'⁺','-':'⁻','=':'⁼','(':'⁽',')':'⁾',' ':' ',
+};
+export function toSuperscript(text: string): string {
+  return [...text].map(c => SUPERSCRIPT_MAP[c] ?? c).join('');
+}
+
+// 버블 (원형)
+export function toBubble(text: string): string {
+  return [...text].map(c => {
+    const code = c.charCodeAt(0);
+    if (code >= 65 && code <= 90) return String.fromCodePoint(0x24B6 + code - 65); // Ⓐ-Ⓩ
+    if (code >= 97 && code <= 122) return String.fromCodePoint(0x24D0 + code - 97); // ⓐ-ⓩ
+    if (code >= 49 && code <= 57) return String.fromCodePoint(0x2460 + code - 49);  // ①-⑨
+    if (c === '0') return '⓪';
+    return c;
+  }).join('');
+}
+
+// 검은 버블
+const BLACK_BUBBLE_MAP: Record<string, string> = {
+  A:'🅐',B:'🅑',C:'🅒',D:'🅓',E:'🅔',F:'🅕',G:'🅖',H:'🅗',I:'🅘',J:'🅙',K:'🅚',L:'🅛',M:'🅜',
+  N:'🅝',O:'🅞',P:'🅟',Q:'🅠',R:'🅡',S:'🅢',T:'🅣',U:'🅤',V:'🅥',W:'🅦',X:'🅧',Y:'🅨',Z:'🅩',
+};
+export function toBlackBubble(text: string): string {
+  return [...text.toUpperCase()].map(c => BLACK_BUBBLE_MAP[c] ?? c).join('');
+}
+
+// 취소선
+export function toStrikethrough(text: string): string {
+  return [...text].map(c => c + '̶').join('');
+}
+
+// 밑줄
+export function toUnderline(text: string): string {
+  return [...text].map(c => c + '̲').join('');
+}
+
+// 글자 사이 구분자
+export function toSpaced(text: string, sep = ' · '): string {
+  return [...text].join(sep);
+}
+
+// 장식 프레임
+export function toFrame(text: string, style: 'star' | 'grad' | 'kakko' | 'lenti'): string {
+  const frames = {
+    star:  { l: '★彡 ', r: ' 彡★' },
+    grad:  { l: '░▒▓ ', r: ' ▓▒░' },
+    kakko: { l: '『',   r: '』'   },
+    lenti: { l: '【',   r: '】'   },
+  };
+  const f = frames[style];
+  return f.l + text + f.r;
+}
+
+// 모스 부호
+const MORSE_MAP: Record<string, string> = {
+  A:'.-',B:'-...',C:'-.-.',D:'-..',E:'.',F:'..-.',G:'--.',H:'....',I:'..',J:'.---',
+  K:'-.-',L:'.-..',M:'--',N:'-.',O:'---',P:'.--.',Q:'--.-',R:'.-.',S:'...',T:'-',
+  U:'..-',V:'...-',W:'.--',X:'-..-',Y:'-.--',Z:'--..',
+  '0':'-----','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....',
+  '6':'-....','7':'--...','8':'---..','9':'----.',
+  '.':'.-.-.-',',':'--..--','?':'..--..','!':'-.-.--',' ':'/',
+};
+export function toMorse(text: string): string {
+  return [...text.toUpperCase()].map(c => MORSE_MAP[c] ?? c).join(' ');
+}
+
+// 바이너리
+export function toBinary(text: string): string {
+  return [...text].map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join(' ');
+}
+
+// ── 변환 목록 (UI용) ───────────────────────────────────────────────────────────
+
 export interface ArtResult {
   id: string;
   label: string;
@@ -147,16 +242,39 @@ export interface ArtResult {
 export function getArtResults(text: string): ArtResult[] {
   if (!text.trim()) return [];
   return [
-    { id: 'block',   label: '🔡 블록 글자',    value: toBlockText(text),         mono: true, scrollX: true },
-    { id: 'box-d',   label: '╔ 이중 테두리',   value: toBoxed(text, 'double'),   mono: true },
-    { id: 'box-r',   label: '╭ 둥근 테두리',   value: toBoxed(text, 'round'),    mono: true },
-    { id: 'box-b',   label: '┏ 굵은 테두리',   value: toBoxed(text, 'bold'),     mono: true },
-    { id: 'emoji',   label: '🌐 이모지 플래그', value: toEmojiFlag(text) },
-    { id: 'flip',    label: '🙃 뒤집기',        value: toUpsideDown(text) },
-    { id: 'small',   label: 'ꜱᴍᴀʟʟ ᴄᴀᴘꜱ',    value: toSmallCaps(text) },
-    { id: 'bold',    label: '𝐁𝐨𝐥𝐝',           value: toBold(text) },
-    { id: 'script',  label: '𝒮𝒸𝓇𝒾𝓅𝓉',        value: toScript(text) },
-    { id: 'double',  label: '𝔻𝕠𝕦𝕓𝕝𝕖',        value: toDoubleStruck(text) },
-    { id: 'fraktur', label: '𝔉𝔯𝔞𝔨𝔱𝔲𝔯',       value: toFraktur(text) },
+    // 블록
+    { id: 'block',    label: '🔡 블록 글자',     value: toBlockText(text),          mono: true, scrollX: true },
+    // 테두리
+    { id: 'box-d',    label: '╔ 이중 테두리',    value: toBoxed(text, 'double'),    mono: true },
+    { id: 'box-r',    label: '╭ 둥근 테두리',    value: toBoxed(text, 'round'),     mono: true },
+    { id: 'box-b',    label: '┏ 굵은 테두리',    value: toBoxed(text, 'bold'),      mono: true },
+    // 장식 프레임
+    { id: 'grad',     label: '░▒▓ 그라데이션',   value: toFrame(text, 'grad') },
+    { id: 'star',     label: '★彡 별 장식',      value: toFrame(text, 'star') },
+    { id: 'kakko',    label: '『』 이중 꺾쇠',   value: toFrame(text, 'kakko') },
+    { id: 'lenti',    label: '【】 렌티큘러',    value: toFrame(text, 'lenti') },
+    // 글자 사이
+    { id: 'dot',      label: '· 도트 구분',      value: toSpaced(text, ' · ') },
+    { id: 'heart',    label: '♡ 하트 구분',      value: toSpaced(text, '♡') },
+    { id: 'star2',    label: '✦ 별 구분',        value: toSpaced(text, '✦') },
+    // 폰트 변형
+    { id: 'fullw',    label: 'Ａ 전각 문자',     value: toFullWidth(text) },
+    { id: 'super',    label: 'ˢᵘᵖ 위첨자',      value: toSuperscript(text) },
+    { id: 'bubble',   label: 'Ⓑ 버블',          value: toBubble(text) },
+    { id: 'bblack',   label: '🅑 검은 버블',     value: toBlackBubble(text) },
+    { id: 'strike',   label: 't̶ 취소선',         value: toStrikethrough(text) },
+    { id: 'under',    label: 't͟ 밑줄',           value: toUnderline(text) },
+    // 이모지/변환
+    { id: 'emoji',    label: '🌐 이모지 플래그', value: toEmojiFlag(text) },
+    { id: 'flip',     label: '🙃 뒤집기',         value: toUpsideDown(text) },
+    { id: 'small',    label: 'ꜱᴍᴀʟʟ ᴄᴀᴘꜱ',     value: toSmallCaps(text) },
+    // 수학 폰트
+    { id: 'bold',     label: '𝐁𝐨𝐥𝐝',            value: toBold(text) },
+    { id: 'script',   label: '𝒮𝒸𝓇𝒾𝓅𝓉',         value: toScript(text) },
+    { id: 'double',   label: '𝔻𝕠𝕦𝕓𝕝𝕖',         value: toDoubleStruck(text) },
+    { id: 'fraktur',  label: '𝔉𝔯𝔞𝔨𝔱𝔲𝔯',        value: toFraktur(text) },
+    // 코드
+    { id: 'morse',    label: '• − 모스 부호',    value: toMorse(text),              mono: true, scrollX: true },
+    { id: 'binary',   label: '01 바이너리',       value: toBinary(text),             mono: true, scrollX: true },
   ];
 }
