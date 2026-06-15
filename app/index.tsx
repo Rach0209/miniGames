@@ -122,6 +122,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/catch-mind')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🎨</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>캐치 마인드</Text>
+            <Text style={styles.gameDesc}>그림을 그려 출제하거나, 다른 사람 그림을 맞춰보세요 🔒</Text>
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
     </>
   );
