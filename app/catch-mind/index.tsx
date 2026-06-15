@@ -11,7 +11,8 @@ import {
   PanResponder,
   Platform,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { onAuthStateChange } from '../../utils/supabase';
@@ -584,9 +585,16 @@ function MyDrawingsMode({ onBack }: { onBack: () => void }) {
 // ─── 메인 ─────────────────────────────────────────────────────────────────────
 
 export default function CatchMindScreen() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState<Mode>('select');
   const insets = useSafeAreaInsets();
+
+  const homeHeaderLeft = () => (
+    <TouchableOpacity onPress={() => router.replace('/')} style={{ paddingHorizontal: 8 }}>
+      <Ionicons name="home-outline" size={22} color="#fff" />
+    </TouchableOpacity>
+  );
 
   useEffect(() => {
     const { data: { subscription } } = onAuthStateChange((u) => setUser(u));
@@ -596,7 +604,7 @@ export default function CatchMindScreen() {
   if (!user) {
     return (
       <>
-        <Stack.Screen options={{ title: '캐치 마인드' }} />
+        <Stack.Screen options={{ title: '캐치 마인드', headerLeft: homeHeaderLeft }} />
         <View style={[styles.centered, { paddingBottom: insets.bottom }]}>
           <Text style={styles.lockEmoji}>🔒</Text>
           <Text style={styles.lockTitle}>로그인이 필요해요</Text>
