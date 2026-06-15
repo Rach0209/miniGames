@@ -235,6 +235,7 @@ function DrawMode({ onBack }: { onBack: () => void }) {
   const [answer, setAnswer] = useState('');
   const [hint, setHint] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async () => {
     if (paths.length === 0) {
@@ -248,6 +249,7 @@ function DrawMode({ onBack }: { onBack: () => void }) {
     setSubmitting(true);
     try {
       await submitDrawing(answer, hint, paths);
+      setSubmitted(true);
       Alert.alert('완료!', '그림이 출제됐어요. 다른 사람들이 맞춰볼 거예요!', [
         { text: '확인', onPress: onBack },
       ]);
@@ -294,12 +296,14 @@ function DrawMode({ onBack }: { onBack: () => void }) {
       </View>
 
       <TouchableOpacity
-        style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+        style={[styles.submitBtn, (submitting || submitted) && styles.submitBtnDisabled]}
         onPress={handleSubmit}
-        disabled={submitting}
+        disabled={submitting || submitted}
       >
         {submitting ? (
           <ActivityIndicator color="#fff" />
+        ) : submitted ? (
+          <Text style={styles.submitBtnText}>✅ 출제 완료</Text>
         ) : (
           <Text style={styles.submitBtnText}>출제하기</Text>
         )}
