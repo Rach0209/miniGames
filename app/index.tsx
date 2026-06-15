@@ -124,6 +124,18 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/ascii-art')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>✨</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>텍스트 아트</Text>
+            <Text style={styles.gameDesc}>텍스트를 블록 글자, 이모지, 뒤집기 등으로 변환</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
           onPress={() => router.push('/catch-mind')}
           activeOpacity={0.8}
         >
