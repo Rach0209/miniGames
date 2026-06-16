@@ -40,3 +40,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# claude-configs (별도 레포, 미니게임 레포에 포함 안 함)
+UsersbssDocumentsBSSclaude-configs/
