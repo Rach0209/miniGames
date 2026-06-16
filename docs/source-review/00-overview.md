@@ -174,3 +174,4 @@ utils/
 | [05-2048.md](./05-2048.md) | 2048 | 이동 알고리즘, PanResponder(스와이프) |
 | [06-jamo-wordle.md](./06-jamo-wordle.md) | 자모 워들 | 한글 자모 분해, 정답 판정 로직 |
 | [07-ascii-art.md](./07-ascii-art.md) | 텍스트 아트 | useMemo, 순수 변환 함수 |
+| [08-expo-architecture.md](./08-expo-architecture.md) | Expo & 아키텍처 | Metro 번들러, 파일 라우팅, 오프라인 구조 선택 이유 |
