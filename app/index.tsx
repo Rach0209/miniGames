@@ -146,6 +146,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/flappy-bird')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🐥</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>플래피 버드</Text>
+            <Text style={styles.gameDesc}>탭해서 날아올라 파이프를 통과하세요!</Text>
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
     </>
   );
