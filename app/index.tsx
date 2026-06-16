@@ -158,6 +158,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/pixel-art')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🧱</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>도트 변환기</Text>
+            <Text style={styles.gameDesc}>이미지를 업로드하면 도트 아트로 바꿔드려요 (웹 전용)</Text>
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
     </>
   );
