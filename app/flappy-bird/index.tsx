@@ -17,8 +17,8 @@ const PIPE_CAP_H = 18;
 const PIPE_GAP = 185;
 const PIPE_SPEED = 2.6;
 const PIPE_SPAWN_FRAMES = 210;
-const GRAVITY = 0.25;
-const JUMP_VEL = -7.0;
+const GRAVITY = 0.18;
+const JUMP_VEL = -5.7;
 const GROUND_H = 48;
 const BEST_KEY = 'flappy_best_score_v1';
 
@@ -72,7 +72,7 @@ export default function FlappyBirdScreen() {
     if (g.phase !== 'playing') return;
 
     // physics (max fall speed 6px/frame)
-    g.birdVel = Math.min(g.birdVel + GRAVITY, 6);
+    g.birdVel = Math.min(g.birdVel + GRAVITY, 4.5);
     g.birdY += g.birdVel;
     g.birdRot = Math.max(-30, Math.min(90, g.birdVel * 5));
     g.frame++;
