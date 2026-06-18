@@ -1,11 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent,
+  View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../utils/supabase';
+import { loadFlappyBirdBest, recordFlappyBirdGame } from '../../utils/flappyBirdStorage';
+import LeaderboardView from '../../components/LeaderboardView';
 
 // ── constants ──────────────────────────────────────────────
 const BIRD_X = 80;
@@ -20,7 +22,6 @@ const PIPE_SPAWN_FRAMES = 210;
 const GRAVITY = 0.18;
 const JUMP_VEL = -5.7;
 const GROUND_H = 48;
-const BEST_KEY = 'flappy_best_score_v1';
 
 type Phase = 'idle' | 'playing' | 'dead';
 
@@ -38,6 +39,8 @@ export default function FlappyBirdScreen() {
 
   const [, forceRender] = useState(0);
   const rerender = useCallback(() => forceRender(n => n + 1), []);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const G = useRef({
     phase: 'idle' as Phase,
@@ -55,11 +58,19 @@ export default function FlappyBirdScreen() {
   const rafId = useRef<number | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(BEST_KEY).then(v => {
-      if (v) { G.current.bestScore = parseInt(v, 10); rerender(); }
+    loadFlappyBirdBest().then(best => {
+      G.current.bestScore = best;
+      rerender();
     });
+
+    supabase.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
+
     return () => {
       if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+      subscription.unsubscribe();
     };
   }, [rerender]);
 
@@ -118,8 +129,8 @@ export default function FlappyBirdScreen() {
       g.phase = 'dead';
       if (g.score > g.bestScore) {
         g.bestScore = g.score;
-        AsyncStorage.setItem(BEST_KEY, String(g.score));
       }
+      recordFlappyBirdGame(g.score);
       rerender();
       return;
     }
@@ -192,6 +203,14 @@ export default function FlappyBirdScreen() {
               style={{ paddingHorizontal: 8 }}
             >
               <Ionicons name="home-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => setShowLeaderboard(true)}
+              style={{ paddingHorizontal: 8 }}
+            >
+              <Text style={{ fontSize: 22 }}>🏆</Text>
             </TouchableOpacity>
           ),
         }}
@@ -286,6 +305,28 @@ export default function FlappyBirdScreen() {
           </View>
         )}
       </TouchableOpacity>
+
+      {/* leaderboard modal */}
+      <Modal
+        visible={showLeaderboard}
+        animationType="slide"
+        onRequestClose={() => setShowLeaderboard(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>플래피 버드 랭킹</Text>
+            <TouchableOpacity onPress={() => setShowLeaderboard(false)}>
+              <Ionicons name="close" size={26} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <LeaderboardView
+            gameType="flappy-bird"
+            valueFormatter={(v) => `${v}점`}
+            accentColor="#FDD835"
+            isLoggedIn={isLoggedIn}
+          />
+        </View>
+      </Modal>
     </>
   );
 }
@@ -392,5 +433,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 0.3,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#0D1B2A',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E3A4A',
+  },
+  modalTitle: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

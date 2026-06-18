@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, PanResponder, Platform,
+  View, Text, TouchableOpacity, StyleSheet, PanResponder, Platform, Modal,
 } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../utils/supabase';
+import { loadSnakeBest, recordSnakeGame } from '../../utils/snakeStorage';
+import LeaderboardView from '../../components/LeaderboardView';
 
 const COLS = 20;
 const ROWS = 20;
 const TICK_MS = 150;
-const BEST_KEY = 'snake_best';
 
 type Pos = { x: number; y: number };
 type Dir = { x: -1 | 0 | 1; y: -1 | 0 | 1 };
@@ -49,14 +50,25 @@ export default function SnakeScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [, forceUpdate] = useState(0);
   const rerender = () => forceUpdate(n => n + 1);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(BEST_KEY).then(val => {
-      if (val) { g.current.best = parseInt(val, 10); rerender(); }
+    loadSnakeBest().then(best => {
+      g.current.best = best;
+      rerender();
     });
-  }, []);
 
-  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+    supabase.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      subscription.unsubscribe();
+    };
+  }, []);
 
   function beginGame() {
     const state = g.current;
@@ -84,8 +96,8 @@ export default function SnakeScreen() {
         s.status = 'gameover';
         if (s.score > s.best) {
           s.best = s.score;
-          AsyncStorage.setItem(BEST_KEY, String(s.score));
         }
+        recordSnakeGame(s.score);
         clearInterval(intervalRef.current!);
         rerender();
         return;
@@ -152,6 +164,14 @@ export default function SnakeScreen() {
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.replace('/')} style={{ paddingHorizontal: 8 }}>
               <Ionicons name="home-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => setShowLeaderboard(true)}
+              style={{ paddingHorizontal: 8 }}
+            >
+              <Text style={{ fontSize: 22 }}>🏆</Text>
             </TouchableOpacity>
           ),
         }}
@@ -240,6 +260,28 @@ export default function SnakeScreen() {
           </View>
         </View>
       </View>
+
+      {/* leaderboard modal */}
+      <Modal
+        visible={showLeaderboard}
+        animationType="slide"
+        onRequestClose={() => setShowLeaderboard(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>뱀 게임 랭킹</Text>
+            <TouchableOpacity onPress={() => setShowLeaderboard(false)}>
+              <Ionicons name="close" size={26} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <LeaderboardView
+            gameType="snake"
+            valueFormatter={(v) => `${v}점`}
+            accentColor="#4ade80"
+            isLoggedIn={isLoggedIn}
+          />
+        </View>
+      </Modal>
     </>
   );
 }
@@ -307,4 +349,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dpadCenter: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#121213',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  modalTitle: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
 });
