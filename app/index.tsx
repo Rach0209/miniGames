@@ -170,6 +170,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/snake')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🐍</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>뱀 게임</Text>
+            <Text style={styles.gameDesc}>먹이를 먹으며 길어지는 뱀을 조종하세요</Text>
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
     </>
   );
