@@ -6,6 +6,6 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "8083", "--clear"],
       "port": 8083
-    }
+    },
   ]
 }
