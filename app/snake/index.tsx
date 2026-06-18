@@ -29,7 +29,8 @@ function randFood(snake: Pos[]): Pos {
 const initSnake = (): Pos[] => [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
 
 export default function SnakeScreen() {
-  const { width } = useWindowDimensions();
+  const { width: rawWidth } = useWindowDimensions();
+  const width = rawWidth || 375;
   const insets = useSafeAreaInsets();
   const router = useRouter();
 

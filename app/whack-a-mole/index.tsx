@@ -43,7 +43,8 @@ interface HoleAnim {
 }
 
 export default function WhackAMoleScreen() {
-  const { width } = useWindowDimensions();
+  const { width: rawWidth } = useWindowDimensions();
+  const width = rawWidth || 375;
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
