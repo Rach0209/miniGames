@@ -248,11 +248,9 @@ export default function WhackAMoleScreen() {
           </View>
         </View>
 
-        {hitFeedback && (
-          <Text key={hitFeedback.id} style={[styles.hitFeedback, { color: hitFeedback.color }]}>
-            {hitFeedback.text}
-          </Text>
-        )}
+        <Text key={hitFeedback?.id ?? -1} style={[styles.hitFeedback, { color: hitFeedback?.color ?? 'transparent' }]}>
+          {hitFeedback?.text ?? ' '}
+        </Text>
 
         <View style={styles.legend}>
           <Text style={styles.legendText}>🐹 +1</Text>
