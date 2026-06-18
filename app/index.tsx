@@ -182,6 +182,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/whack-a-mole')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🐹</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>두더지 잡기</Text>
+            <Text style={styles.gameDesc}>튀어나오는 두더지를 빠르게 탭하세요! ⭐ +3 💣 -1</Text>
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
     </>
   );
