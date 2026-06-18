@@ -259,7 +259,7 @@ export default function WhackAMoleScreen() {
           <Text style={styles.legendText}>💣 -1</Text>
         </View>
 
-        <View style={[styles.grid, { gap: 12 }]}>
+        <View style={[styles.grid, { gap: 12, width: CELL * 3 + 12 * 2 }]}>
           {holeDisplays.map((display, idx) => {
             const ha = holeAnims.current[idx];
             const translateY = ha.anim.interpolate({
