@@ -9,16 +9,17 @@ import { supabase } from '../../utils/supabase';
 import { loadWhackBest, recordWhackGame } from '../../utils/whackAMoleStorage';
 import LeaderboardView from '../../components/LeaderboardView';
 
-const GAME_DURATION = 30;
+const GAME_DURATION = 60;
 const NUM_HOLES = 9;
 
 type MoleType = 'normal' | 'golden' | 'bomb';
 type Phase = 'idle' | 'playing' | 'gameover';
 
 function getDifficulty(elapsed: number) {
-  if (elapsed < 10) return { maxMoles: 1, visibleMs: 1500, minDelay: 800, maxDelay: 1300 };
-  if (elapsed < 20) return { maxMoles: 2, visibleMs: 1100, minDelay: 500, maxDelay: 1000 };
-  return { maxMoles: 3, visibleMs: 700, minDelay: 300, maxDelay: 700 };
+  if (elapsed < 15) return { maxMoles: 1, visibleMs: 1200, minDelay: 500, maxDelay: 900 };
+  if (elapsed < 30) return { maxMoles: 2, visibleMs: 900, minDelay: 350, maxDelay: 750 };
+  if (elapsed < 45) return { maxMoles: 3, visibleMs: 650, minDelay: 250, maxDelay: 550 };
+  return { maxMoles: 4, visibleMs: 500, minDelay: 150, maxDelay: 400 };
 }
 
 function randomMoleType(): MoleType {
@@ -264,7 +265,7 @@ export default function WhackAMoleScreen() {
             const ha = holeAnims.current[idx];
             const translateY = ha.anim.interpolate({
               inputRange: [0, 1],
-              outputRange: [CELL * 0.65, 0],
+              outputRange: [CELL * 0.65, -CELL * 0.18],
             });
             return (
               <TouchableOpacity
