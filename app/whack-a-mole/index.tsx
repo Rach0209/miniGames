@@ -367,7 +367,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    paddingHorizontal: 16,
   },
   cell: {
     backgroundColor: '#2d5a1a',
