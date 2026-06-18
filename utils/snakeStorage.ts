@@ -48,6 +48,7 @@ export async function recordSnakeGame(score: number): Promise<void> {
       wins: newBest,
       max_streak: newBest,
       current_streak: score,
+      distribution: [],
       last_played_date: new Date().toISOString().slice(0, 10),
       last_played_won: false,
       updated_at: new Date().toISOString(),
