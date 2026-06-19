@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, PanResponder, Platform, Modal,
+  View, Text, TouchableOpacity, StyleSheet, PanResponder, Platform, Modal, ScrollView,
 } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -120,8 +120,9 @@ export default function SnakeScreen() {
   }
 
   const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
+    // 탭은 자식 버튼에 전달, 스와이프만 여기서 처리
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, { dx, dy }) => Math.abs(dx) > 8 || Math.abs(dy) > 8,
     onPanResponderRelease: (_, { dx, dy }) => {
       const state = g.current;
       if (state.status !== 'playing') { beginGame(); return; }
@@ -177,7 +178,11 @@ export default function SnakeScreen() {
           ),
         }}
       />
-      <View style={[styles.screen, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+      <ScrollView
+        contentContainerStyle={[styles.screen, { paddingBottom: Math.max(insets.bottom, 24) }]}
+        scrollEnabled={true}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.scoreRow}>
           <View style={styles.scoreBox}>
             <Text style={styles.scoreLabel}>점수</Text>
@@ -260,7 +265,7 @@ export default function SnakeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* leaderboard modal */}
       <Modal
