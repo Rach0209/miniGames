@@ -194,6 +194,18 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/tetris')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🧱</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>테트리스</Text>
+            <Text style={styles.gameDesc}>블록을 쌓아 줄을 완성하세요! 방향키/스와이프 지원</Text>
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
     </>
   );
