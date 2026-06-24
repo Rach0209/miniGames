@@ -206,6 +206,42 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/lights-out')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>💡</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>라이트 아웃</Text>
+            <Text style={styles.gameDesc}>탭하면 주변 칸도 토글 — 모든 불을 꺼보세요!</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/numberlink')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🔗</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>넘버링크</Text>
+            <Text style={styles.gameDesc}>같은 숫자끼리 선으로 연결하고 모든 칸을 채우세요!</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.gameCard, { marginTop: 16 }]}
+          onPress={() => router.push('/nonogram')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.gameEmoji}>🖼️</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.gameName}>노노그램</Text>
+            <Text style={styles.gameDesc}>숫자 힌트로 그림을 완성하는 픽처로직 퍼즐!</Text>
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
     </>
   );
