@@ -1147,6 +1147,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 28,
     width: '100%',
+    maxWidth: 480,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#3A3A3C',
@@ -1198,14 +1199,17 @@ const styles = StyleSheet.create({
   lvBtnTitle: { color: '#818384', fontSize: 10, marginTop: 2, textAlign: 'center' },
 
   imageMakerBtn: {
-    alignSelf: 'stretch',
+    alignSelf: 'center',
     backgroundColor: '#1A1A1B',
     borderWidth: 1,
     borderColor: '#3A3A3C',
     borderRadius: 8,
     paddingVertical: 8,
+    paddingHorizontal: 20,
     alignItems: 'center',
     marginBottom: 10,
+    maxWidth: 300,
+    width: '100%',
   },
   imageMakerBtnText: { color: '#818384', fontSize: 13, fontWeight: '600' },
 
