@@ -698,7 +698,7 @@ function ImageMakerModal({
     <Modal visible={visible} transparent animationType="slide">
       <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} style={[styles.modalBox, { maxHeight: 560 }]} onPress={() => {}}>
-          <Text style={styles.modalTitle}>🖼️ 이미지로 만들기</Text>
+          <Text style={[styles.modalTitle, { marginBottom: 20 }]}>🖼️ 이미지로 만들기</Text>
 
           {React.createElement('input', {
             ref: fileInputRef, type: 'file', accept: 'image/*',
