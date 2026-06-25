@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, useWindowDimensions,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, useWindowDimensions, Platform,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onAuthStateChange } from '../../utils/supabase';
+import type { User } from '@supabase/supabase-js';
 
 // 퍼즐 정의: solution은 0/1 2차원 배열, title은 완성 시 표시할 이름
 interface Puzzle {
@@ -588,18 +590,186 @@ function checkComplete(grid: CellState[][], solution: number[][]): boolean {
   return true;
 }
 
+// 이미지 → 노노그램 변환 모달 (웹 전용)
+function ImageMakerModal({
+  visible, onClose, onPlay,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onPlay: (puzzle: Puzzle) => void;
+}) {
+  const fileInputRef = useRef<any>(null);
+  const previewCanvasRef = useRef<any>(null);
+  const imageElRef = useRef<any>(null);
+
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [gridSize, setGridSize] = useState(10);
+  const [threshold, setThreshold] = useState(128);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      setImgLoaded(false);
+      setFileName(null);
+      setError(null);
+      setGridSize(10);
+      setThreshold(128);
+      imageElRef.current = null;
+    }
+  }, [visible]);
+
+  const getSolution = useCallback((): number[][] | null => {
+    const img = imageElRef.current;
+    if (!img) return null;
+    const aspect = img.naturalHeight / img.naturalWidth;
+    const cols = gridSize;
+    const rows = Math.max(1, Math.round(gridSize * aspect));
+    const small = document.createElement('canvas');
+    small.width = cols;
+    small.height = rows;
+    const sctx = small.getContext('2d');
+    if (!sctx) return null;
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(img, 0, 0, cols, rows);
+    const data = sctx.getImageData(0, 0, cols, rows).data;
+    const solution: number[][] = [];
+    for (let r = 0; r < rows; r++) {
+      const row: number[] = [];
+      for (let c = 0; c < cols; c++) {
+        const i = (r * cols + c) * 4;
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        row.push(gray < threshold ? 1 : 0);
+      }
+      solution.push(row);
+    }
+    return solution;
+  }, [gridSize, threshold]);
+
+  const drawPreview = useCallback(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    const solution = getSolution();
+    if (!solution) return;
+    const rows = solution.length;
+    const cols = solution[0].length;
+    const CELL = Math.min(Math.floor(280 / Math.max(rows, cols)), 32);
+    canvas.width = cols * CELL;
+    canvas.height = rows * CELL;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        ctx.fillStyle = solution[r][c] === 1 ? '#E8E8E8' : '#1A1A1B';
+        ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+        ctx.strokeStyle = '#3A3A3C';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(c * CELL, r * CELL, CELL, CELL);
+      }
+    }
+  }, [getSolution]);
+
+  useEffect(() => {
+    if (imgLoaded) drawPreview();
+  }, [imgLoaded, drawPreview]);
+
+  const handleFile = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setError('이미지 파일만 업로드할 수 있어요.'); return; }
+    setError(null);
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => { imageElRef.current = img; setImgLoaded(true); };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePlay = () => {
+    const solution = getSolution();
+    if (!solution) return;
+    const name = fileName ? `📷 ${fileName.replace(/\.[^.]+$/, '')}` : '📷 내 이미지';
+    onPlay({ title: name, solution });
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={[styles.modalBox, { maxHeight: 560 }]} onPress={() => {}}>
+          <Text style={styles.modalTitle}>🖼️ 이미지로 만들기</Text>
+
+          {React.createElement('input', {
+            ref: fileInputRef, type: 'file', accept: 'image/*',
+            style: { display: 'none' },
+            onChange: (e: any) => handleFile(e.target.files?.[0]),
+          })}
+
+          <TouchableOpacity style={styles.imgPickBtn} onPress={() => fileInputRef.current?.click()} activeOpacity={0.8}>
+            <Text style={styles.imgPickBtnText}>{fileName ? '다른 이미지 선택' : '📁 이미지 선택'}</Text>
+          </TouchableOpacity>
+
+          {error && <Text style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 8 }}>{error}</Text>}
+
+          {imgLoaded && (
+            <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false}>
+              <View style={{ alignItems: 'center', marginVertical: 12 }}>
+                {React.createElement('canvas', {
+                  ref: previewCanvasRef,
+                  style: { maxWidth: '100%', height: 'auto', borderRadius: 6 },
+                })}
+              </View>
+
+              <Text style={styles.sliderLabel}>그리드 크기: {gridSize}</Text>
+              {React.createElement('input', {
+                type: 'range', min: 5, max: 20, value: gridSize,
+                onChange: (e: any) => setGridSize(Number(e.target.value)),
+                style: { width: '100%', marginBottom: 12 },
+              })}
+
+              <Text style={styles.sliderLabel}>밝기 기준: {threshold}  (낮을수록 어두운 픽셀만 채워짐)</Text>
+              {React.createElement('input', {
+                type: 'range', min: 30, max: 220, value: threshold,
+                onChange: (e: any) => setThreshold(Number(e.target.value)),
+                style: { width: '100%', marginBottom: 16 },
+              })}
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={handlePlay} activeOpacity={0.8}>
+                <Text style={styles.primaryBtnText}>이 퍼즐로 플레이 →</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+
+          <TouchableOpacity style={styles.secondaryBtn} onPress={onClose} activeOpacity={0.8}>
+            <Text style={styles.secondaryBtnText}>닫기</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
 export default function NonogramScreen() {
   const { width: rawWidth } = useWindowDimensions();
   const width = rawWidth || 375;
   const insets = useSafeAreaInsets();
 
+  const [user, setUser] = useState<User | null>(null);
+  const [customPuzzle, setCustomPuzzle] = useState<Puzzle | null>(null);
+  const [showImageMaker, setShowImageMaker] = useState(false);
   const [puzzleIdx, setPuzzleIdx] = useState(0);
   const [maxUnlocked, setMaxUnlocked] = useState(0);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
   const [showClear, setShowClear] = useState(false);
   const [drawMode, setDrawMode] = useState<1 | 2>(1); // 1=채우기, 2=X표시
 
-  const puzzle = PUZZLES[puzzleIdx];
+  useEffect(() => {
+    const { data: { subscription } } = onAuthStateChange((u) => setUser(u));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const puzzle = customPuzzle ?? PUZZLES[puzzleIdx];
   const rows = puzzle.solution.length;
   const cols = puzzle.solution[0].length;
 
@@ -642,9 +812,17 @@ export default function NonogramScreen() {
   const loadPuzzle = useCallback((idx: number) => {
     const p = PUZZLES[idx];
     setPuzzleIdx(idx);
+    setCustomPuzzle(null);
     setGrid(Array(p.solution.length).fill(null).map(() => Array(p.solution[0].length).fill(0)));
     setShowClear(false);
     setShowLevelSelect(false);
+  }, []);
+
+  const handlePlayCustomPuzzle = useCallback((p: Puzzle) => {
+    setCustomPuzzle(p);
+    setGrid(Array(p.solution.length).fill(null).map(() => Array(p.solution[0].length).fill(0)));
+    setShowClear(false);
+    setShowImageMaker(false);
   }, []);
 
   const [painting, setPainting] = useState<{ mode: CellState } | null>(null);
@@ -663,14 +841,16 @@ export default function NonogramScreen() {
       }
 
       if (checkComplete(next, puzzle.solution)) {
-        const newMax = Math.max(maxUnlocked, puzzleIdx + 1);
-        setMaxUnlocked(newMax);
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ maxUnlocked: newMax }));
+        if (!customPuzzle) {
+          const newMax = Math.max(maxUnlocked, puzzleIdx + 1);
+          setMaxUnlocked(newMax);
+          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ maxUnlocked: newMax }));
+        }
         setShowClear(true);
       }
       return next;
     });
-  }, [drawMode, painting, puzzle, puzzleIdx, maxUnlocked]);
+  }, [drawMode, painting, puzzle, puzzleIdx, maxUnlocked, customPuzzle]);
 
   // 행 힌트가 현재 그리드와 일치하는지 확인
   const rowDone = useMemo(() =>
@@ -699,9 +879,11 @@ export default function NonogramScreen() {
       >
         {/* 헤더 */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.levelBadge} onPress={() => setShowLevelSelect(true)} activeOpacity={0.7}>
-            <Text style={styles.levelText}>No.{puzzleIdx + 1}</Text>
-            <Text style={styles.levelArrow}> ▼</Text>
+          <TouchableOpacity style={styles.levelBadge} onPress={() => { setCustomPuzzle(null); setShowLevelSelect(true); }} activeOpacity={0.7}>
+            {customPuzzle
+              ? <Text style={styles.levelText}>📷 커스텀 ▼</Text>
+              : <><Text style={styles.levelText}>No.{puzzleIdx + 1}</Text><Text style={styles.levelArrow}> ▼</Text></>
+            }
           </TouchableOpacity>
 
           {/* 드로우 모드 토글 */}
@@ -726,6 +908,13 @@ export default function NonogramScreen() {
             <Text style={styles.resetText}>↺</Text>
           </TouchableOpacity>
         </View>
+
+        {/* 이미지로 만들기 버튼 (웹 + 로그인 전용) */}
+        {Platform.OS === 'web' && user && (
+          <TouchableOpacity style={styles.imageMakerBtn} onPress={() => setShowImageMaker(true)} activeOpacity={0.8}>
+            <Text style={styles.imageMakerBtnText}>🖼️ 이미지로 퍼즐 만들기</Text>
+          </TouchableOpacity>
+        )}
 
         {/* 퍼즐 제목 */}
         <Text style={styles.hint}>숫자는 그 줄에서 연속으로 채울 칸 수예요</Text>
@@ -795,7 +984,11 @@ export default function NonogramScreen() {
               <Text style={styles.modalEmoji}>🎉</Text>
               <Text style={styles.modalTitle}>완성!</Text>
               <Text style={styles.modalPuzzleName}>{puzzle.title}</Text>
-              {puzzleIdx + 1 < PUZZLES.length ? (
+              {customPuzzle ? (
+                <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowImageMaker(true)} activeOpacity={0.8}>
+                  <Text style={styles.primaryBtnText}>🖼️ 새 이미지로 도전</Text>
+                </TouchableOpacity>
+              ) : puzzleIdx + 1 < PUZZLES.length ? (
                 <TouchableOpacity style={styles.primaryBtn} onPress={() => loadPuzzle(puzzleIdx + 1)} activeOpacity={0.8}>
                   <Text style={styles.primaryBtnText}>다음 퍼즐 →</Text>
                 </TouchableOpacity>
@@ -808,6 +1001,15 @@ export default function NonogramScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* 이미지 메이커 모달 */}
+        {Platform.OS === 'web' && (
+          <ImageMakerModal
+            visible={showImageMaker}
+            onClose={() => setShowImageMaker(false)}
+            onPlay={handlePlayCustomPuzzle}
+          />
+        )}
 
         {/* 퍼즐 선택 모달 */}
         <Modal visible={showLevelSelect} transparent animationType="slide">
@@ -994,4 +1196,31 @@ const styles = StyleSheet.create({
   lvBtnNum: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   lvBtnNumActive: { color: '#4CAF50' },
   lvBtnTitle: { color: '#818384', fontSize: 10, marginTop: 2, textAlign: 'center' },
+
+  imageMakerBtn: {
+    alignSelf: 'stretch',
+    backgroundColor: '#1A1A1B',
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  imageMakerBtnText: { color: '#818384', fontSize: 13, fontWeight: '600' },
+
+  imgPickBtn: {
+    backgroundColor: '#2C2C2E',
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 12,
+    width: '100%',
+  },
+  imgPickBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  sliderLabel: { color: '#ccc', fontSize: 12, marginBottom: 6 },
 });
