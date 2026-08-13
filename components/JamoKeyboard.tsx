@@ -10,6 +10,7 @@ const ROW3 = ['ㅋ','ㅌ','ㅊ','ㅍ','ㅠ','ㅜ','ㅡ'];
 const KEY_GAP = 4;
 const KEYS_PER_ROW = 9;
 const H_PADDING = 24; // 키보드 좌우 여백 합계
+const MAX_KEY_W = 44; // 데스크톱 등 넓은 화면에서 키가 과도하게 커지는 것 방지
 
 interface Props {
   onKey: (key: string) => void;
@@ -26,7 +27,7 @@ const KEY_COLORS: Record<TileStatus, string> = {
 
 export default function JamoKeyboard({ onKey, keyStatuses }: Props) {
   const { width: screenWidth } = useWindowDimensions();
-  const KEY_W = Math.floor((screenWidth - H_PADDING - KEY_GAP * (KEYS_PER_ROW - 1)) / KEYS_PER_ROW);
+  const KEY_W = Math.min(MAX_KEY_W, Math.floor((screenWidth - H_PADDING - KEY_GAP * (KEYS_PER_ROW - 1)) / KEYS_PER_ROW));
   const KEY_H = Math.max(38, Math.min(48, KEY_W + 8));
   const fontSize = KEY_W < 30 ? 12 : 15;
 
